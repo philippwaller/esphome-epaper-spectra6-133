@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: end-of-file-fixer
       - id: trailing-whitespace
@@ -16,24 +16,24 @@ repos:
       - id: check-case-conflict
       - id: check-merge-conflict
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.7
+    rev: v1.7.12
     hooks:
       - id: actionlint
         args: [-ignore, 'label ".+" is unknown']
         files: ^\.github/workflows/.*\.(yaml|yml)$
   - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.37.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
         files: ^(.*\.(yaml|yml)|\.clang-format)$
         args: [--strict]
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
         files: ^scripts/(.*\.sh|esphomew)$
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.0
+    rev: v0.15.15
     hooks:
       - id: ruff
         args: [--fix]
