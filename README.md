@@ -66,6 +66,7 @@ Follow these three steps to get your Spectra 6 display running in ESPHome.
 
 ### 1. Add the external component
 
+<!-- x-release-please-start-version -->
 ```yaml
 external_components:
   - source:
@@ -74,6 +75,7 @@ external_components:
       ref: v0.1.0
     components: [epaper_spectra6_133]
 ```
+<!-- x-release-please-end -->
 
 Pin the component to a released version so your configuration stays stable and reproducible. To try the latest development state, change `ref` to `main`.
 
@@ -81,6 +83,7 @@ Pin the component to a released version so your configuration stays stable and r
 
 Set your SPI pin numbers in the `substitutions` block at the top — everything else works on any ESP32-S3 board with PSRAM and the ESP-IDF framework. Add your WiFi credentials to `secrets.yaml`, then flash.
 
+<!-- x-release-please-start-version -->
 ```yaml
 substitutions:
   device_name: my-epaper
@@ -134,7 +137,6 @@ wifi:
     password: "12345678"
 
 captive_portal:
-
 external_components:
   - source:
       type: git
@@ -170,6 +172,7 @@ display:
       it.print(it.get_width() / 2,  637, id(font_hero), Color(0, 0, 0), TextAlign::CENTER, "HELLO");
       it.print(it.get_width() / 2,  965, id(font_hero), Color(0, 0, 0), TextAlign::CENTER, "MAKER");
 ```
+<!-- x-release-please-end -->
 
 ### 3. Flash the device
 
