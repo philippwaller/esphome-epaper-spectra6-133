@@ -72,7 +72,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/philippwaller/esphome-epaper-spectra6-133
-      ref: v0.1.0
+      ref: v0.1.1
     components: [epaper_spectra6_133]
 ```
 <!-- x-release-please-end -->
@@ -141,7 +141,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/philippwaller/esphome-epaper-spectra6-133
-      ref: v0.1.0
+      ref: v0.1.1
     components: [epaper_spectra6_133]
 
 font:
