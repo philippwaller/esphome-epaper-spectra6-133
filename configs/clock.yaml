@@ -1,0 +1,389 @@
+---
+# Example: Advanced SNTP clock with an intentional first render.
+#
+# This clock example keeps `update_interval: never` and triggers display
+# refreshes from automations so a first-time user can see when the page changes
+# and why the panel redraws. It also shows how to combine a status page,
+# startup timeout handling, and explicit `component.update` refreshes in one
+# config.
+
+substitutions:
+  # Rename these values first when you copy the example.
+  device_name: epaper-clock
+  friendly_name: Epaper Clock
+  # Use an IANA timezone name, for example Europe/Berlin or America/New_York.
+  timezone: Europe/Berlin
+  # Wait this long for WiFi + SNTP before showing the fallback status page.
+  startup_timeout: 60s
+
+packages:
+  board: !include ../packages/boards/goo_display/esp32_133c02.yaml
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  platformio_options:
+    board_build.psram: enabled
+  on_boot:
+    priority: -100
+    then:
+      - logger.log:
+          level: INFO
+          format: "Boot: waiting up to ${startup_timeout} for WiFi + SNTP"
+      # Wait for WiFi + SNTP. If neither arrives in time, show a fallback page.
+      - delay: ${startup_timeout}
+      - if:
+          condition:
+            lambda: 'return !id(startup_first_render_done);'
+          then:
+            - globals.set:
+                id: startup_first_render_done
+                value: 'true'
+            - if:
+                condition:
+                  wifi.connected:
+                then:
+                  - logger.log:
+                      level: WARN
+                      format: "Startup timeout: WiFi up but SNTP not synced — showing status page"
+                  - globals.set:
+                      id: status_page_reason
+                      value: '2'
+                else:
+                  - logger.log:
+                      level: WARN
+                      format: "Startup timeout: WiFi not connected — showing status page"
+                  - globals.set:
+                      id: status_page_reason
+                      value: '1'
+            - display.page.show: page_status
+            - component.update: epaper_display
+
+logger:
+  level: DEBUG
+  logs:
+    epaper_spectra6_133: DEBUG
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: ${friendly_name}
+    password: !secret ap_password
+
+captive_portal:
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+globals:
+  - id: startup_first_render_done
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+  - id: status_page_reason
+    type: int
+    restore_value: false
+    initial_value: '0'
+
+  - id: time_synced_once
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: ${timezone}
+    on_time_sync:
+      then:
+        - logger.log:
+            level: INFO
+            format: "SNTP synced: %s (uptime %u s)"
+            args:
+              - id(sntp_time).now().strftime("%H:%M:%S").c_str()
+              - millis() / 1000
+        - globals.set:
+            id: time_synced_once
+            value: 'true'
+        - globals.set:
+            id: startup_first_render_done
+            value: 'true'
+        - globals.set:
+            id: status_page_reason
+            value: '0'
+        - display.page.show: page_clock
+        - component.update: epaper_display
+    on_time:
+      # Re-render once per minute after the first successful sync because the
+      # visible clock only shows HH:MM.
+      - seconds: 1
+        then:
+          - if:
+              condition:
+                lambda: 'return id(time_synced_once);'
+              then:
+                - if:
+                    condition:
+                      lambda: 'return id(sntp_time).now().is_valid();'
+                    then:
+                      - logger.log:
+                          level: DEBUG
+                          format: "Minute tick: rendering clock page"
+                      - globals.set:
+                          id: status_page_reason
+                          value: '0'
+                      - display.page.show: page_clock
+                      - component.update: epaper_display
+                    else:
+                      - logger.log:
+                          level: WARN
+                          format: "Minute tick: time sync lost — switching to status page"
+                      - globals.set:
+                          id: status_page_reason
+                          value: '3'
+                      - display.page.show: page_status
+                      - component.update: epaper_display
+
+font:
+  - file: gfonts://Libre Bodoni@700
+    id: font_time
+    size: 354
+    # Keep the glyph set small to reduce footprint
+    glyphs: "0123456789:"
+
+  - file: gfonts://JetBrains Mono@300
+    id: font_weekday
+    size: 50
+    glyphs: " &./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+  - file: gfonts://JetBrains Mono@300
+    id: font_date
+    size: 50
+    glyphs: " /0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+display:
+  - platform: epaper_spectra6_133
+    id: epaper_display
+    # This example refreshes explicitly from automations instead of on a timer.
+    update_interval: never
+    auto_clear_enabled: false
+    update_mode: partial
+    cs0_pin: ${epd_cs0_pin}
+    cs1_pin: ${epd_cs1_pin}
+    clk_pin: ${epd_clk_pin}
+    data0_pin: ${epd_data0_pin}
+    data1_pin: ${epd_data1_pin}
+    busy_pin: ${epd_busy_pin}
+    reset_pin: ${epd_reset_pin}
+    power_pin: ${epd_power_pin}
+    pages:
+      # Use pages when the display has distinct states such as "clock ready"
+      # versus "startup failed". This example keeps those states explicit so
+      # the refresh flow stays easy to follow.
+      - id: page_status
+        lambda: |-
+          // Keep the layout minimal: this page is now an exceptional fallback
+          // instead of the normal first screen during boot.
+          const int center_x = it.get_width() / 2;
+          const int center_y = it.get_height() / 2;
+          const Color black(0, 0, 0);
+          const Color white(255, 255, 255);
+          const Color red(255, 0, 0);
+
+          // These values only affect the temporary status page.
+          const int status_gap = 12;
+          const int status_line_height = 6;
+
+          it.fill(white);
+
+          const int reason = id(status_page_reason);
+          const char *headline = "STARTING";
+          const char *subline = "Waiting for clock";
+
+          switch (reason) {
+            case 1:
+              headline = "WIFI ERROR";
+              subline = "Still connecting";
+              break;
+            case 2:
+              headline = "TIME ERROR";
+              subline = "SNTP timeout";
+              break;
+            case 3:
+              headline = "RECONNECTING";
+              subline = "Time sync lost";
+              break;
+            default:
+              break;
+          }
+
+          int bounds_x, bounds_y;
+          int headline_width, headline_height, subline_width, subline_height;
+          it.get_text_bounds(0, 0, headline, id(font_weekday), TextAlign::TOP_LEFT,
+                             &bounds_x, &bounds_y, &headline_width, &headline_height);
+          it.get_text_bounds(0, 0, subline, id(font_weekday), TextAlign::TOP_LEFT,
+                             &bounds_x, &bounds_y, &subline_width, &subline_height);
+
+          // Measure first, then center the whole block so the page stays balanced
+          // even if you later change the wording or font.
+          const int separator_width = std::max(headline_width, subline_width);
+          const int block_height =
+              headline_height + status_gap + status_line_height + status_gap + subline_height;
+          const int block_top = center_y - block_height / 2;
+
+          it.printf(center_x, block_top, id(font_weekday), black,
+                    TextAlign::TOP_CENTER, "%s", headline);
+          it.filled_rectangle(center_x - separator_width / 2,
+                              block_top + headline_height + status_gap,
+                              separator_width,
+                              status_line_height,
+                              red);
+          it.printf(center_x,
+                    block_top + headline_height + status_gap + status_line_height + status_gap,
+                    id(font_weekday),
+                    black,
+                    TextAlign::TOP_CENTER,
+                    "%s",
+                    subline);
+
+      - id: page_clock
+        lambda: |-
+          // This example renders one complete clock screen with the same layout as
+          // the original demo, but keeps the relevant numbers local to this page.
+          const int center_x = it.get_width() / 2;
+          const Color black(0, 0, 0);
+          const Color white(255, 255, 255);
+          const Color red(255, 0, 0);
+
+          // These constants define the finished design. Adjust them here if you
+          // want to move the existing elements while keeping the centering logic.
+          const int weekday_y = 445;
+          const int accent_line_y = 547;
+          const int accent_line_width = 80;
+          const int accent_line_height = 4;
+          const int time_y = 607;
+          const int time_separator_y = 582;
+          const int time_separator_gap = 40;
+          const int date_y = 1116;
+          const int date_separator_width = 4;
+          const int date_separator_gap = 100;
+          const char *time_separator = ":";
+
+          it.fill(white);
+
+          auto now = id(sntp_time).now();
+
+          // Build the strings first so the measurements below match what will be
+          // drawn on screen.
+          char hours_text[4];
+          char minutes_text[4];
+          char day_text[4];
+          char month_text[8];
+          char year_text[6];
+
+          snprintf(hours_text, sizeof(hours_text), "%02d", now.hour);
+          snprintf(minutes_text, sizeof(minutes_text), "%02d", now.minute);
+          snprintf(day_text, sizeof(day_text), "%02d", now.day_of_month);
+          snprintf(year_text, sizeof(year_text), "%04d", now.year);
+
+          static const char *const WEEKDAYS[] = {
+              "S U N D A Y", "M O N D A Y", "T U E S D A Y", "W E D N E S D A Y",
+              "T H U R S D A Y", "F R I D A Y", "S A T U R D A Y"};
+          static const char *const MONTHS[] = {
+              "", "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+              "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
+
+          const char *weekday_text =
+              (now.day_of_week >= 1 && now.day_of_week <= 7)
+                  ? WEEKDAYS[now.day_of_week - 1]
+                  : "N / A";
+          snprintf(month_text,
+                   sizeof(month_text),
+                   "%s",
+                   (now.month >= 1 && now.month <= 12) ? MONTHS[now.month] : "N/A");
+
+          // Measure each part so the page stays centered even if month names or
+          // glyph widths differ.
+          int bounds_x, bounds_y;
+          int separator_width, separator_height;
+          int day_width, day_height;
+          int month_width, month_height;
+          int year_width, year_height;
+
+          it.get_text_bounds(0, 0, time_separator, id(font_time), TextAlign::TOP_LEFT,
+                             &bounds_x, &bounds_y, &separator_width, &separator_height);
+          it.get_text_bounds(0, 0, day_text, id(font_date), TextAlign::TOP_LEFT,
+                             &bounds_x, &bounds_y, &day_width, &day_height);
+          it.get_text_bounds(0, 0, month_text, id(font_date), TextAlign::TOP_LEFT,
+                             &bounds_x, &bounds_y, &month_width, &month_height);
+          it.get_text_bounds(0, 0, year_text, id(font_date), TextAlign::TOP_LEFT,
+                             &bounds_x, &bounds_y, &year_width, &year_height);
+
+          const int date_height = std::max({day_height, month_height, year_height});
+
+          // Weekday and accent line use top-center alignment, so only the y values
+          // are fixed. Horizontal centering still happens automatically.
+          it.printf(center_x, weekday_y, id(font_weekday), black,
+                    TextAlign::TOP_CENTER, "%s", weekday_text);
+          it.filled_rectangle(center_x - accent_line_width / 2,
+                              accent_line_y,
+                              accent_line_width,
+                              accent_line_height,
+                              red);
+
+          // The time row is split into three blocks: hours, separator, minutes.
+          // Keeping the separator centered makes the whole composition stable.
+          const int separator_center_x = center_x;
+          const int hours_right_x =
+              separator_center_x - separator_width / 2 - time_separator_gap;
+          const int minutes_left_x =
+              separator_center_x + separator_width / 2 + time_separator_gap;
+
+          it.printf(hours_right_x, time_y, id(font_time), black,
+                    TextAlign::TOP_RIGHT, "%s", hours_text);
+          it.printf(separator_center_x, time_separator_y, id(font_time), black,
+                    TextAlign::TOP_CENTER, "%s", time_separator);
+          it.printf(minutes_left_x, time_y, id(font_time), black,
+                    TextAlign::TOP_LEFT, "%s", minutes_text);
+
+          // The month block sits in the middle. Day and year grow away from it,
+          // which keeps the date line balanced for every month name.
+          const int center_group_width =
+              date_separator_width + date_separator_gap + month_width +
+              date_separator_gap + date_separator_width;
+          const int center_group_left = center_x - center_group_width / 2;
+
+          const int left_separator_x = center_group_left;
+          const int month_x = left_separator_x + date_separator_width + date_separator_gap;
+          const int right_separator_x = month_x + month_width + date_separator_gap;
+          const int day_right_x = left_separator_x - date_separator_gap;
+          const int year_left_x = right_separator_x + date_separator_width + date_separator_gap;
+
+          it.printf(day_right_x, date_y, id(font_date), black,
+                    TextAlign::TOP_RIGHT, "%s", day_text);
+          it.filled_rectangle(left_separator_x,
+                              date_y,
+                              date_separator_width,
+                              date_height,
+                              red);
+          it.printf(month_x, date_y, id(font_date), black,
+                    TextAlign::TOP_LEFT, "%s", month_text);
+          it.filled_rectangle(right_separator_x,
+                              date_y,
+                              date_separator_width,
+                              date_height,
+                              red);
+          it.printf(year_left_x, date_y, id(font_date), black,
+                    TextAlign::TOP_LEFT, "%s", year_text);

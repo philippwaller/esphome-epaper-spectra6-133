@@ -1,0 +1,19 @@
+# Custom partition table for large-image demos on 8 MB flash boards.
+#
+# The default partition table limits the app to ~1.8 MB, which is far too
+# small to embed a full-resolution 1200 × 1788 RGB24 image (~6.3 MB).
+# This table sacrifices OTA support and gives almost all 8 MB to a single
+# factory-app partition instead.
+#
+# Required flash size: 8 MB  (board_build.flash_size: 8MB)
+#
+# Partition layout (all offsets are absolute):
+#   0x0000  –  0x8FFF   Bootloader (reserved, not listed)
+#   0x9000  –  0xDFFF   NVS (ESPHome stores Wi-Fi credentials etc.)
+#   0xE000  –  0xEFFF   PHY init data
+#   0x10000 –  0x7FFFFF Factory app  (≈ 7.9 MB)
+#
+# Name,     Type,  SubType,  Offset,    Size
+nvs,        data,  nvs,      0x9000,    0x5000,
+phy_init,   data,  phy,      0xe000,    0x1000,
+app0,       app,   factory,  0x10000,   0x7F0000,

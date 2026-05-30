@@ -1,0 +1,36 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+    "yaml.customTags": [
+        "!secret scalar",
+        "!include scalar",
+        "!lambda scalar",
+        "!env_var scalar",
+        "!remove scalar",
+        "!extend scalar",
+        "!include_dir_list scalar",
+        "!include_dir_named scalar",
+        "!include_dir_merge_list scalar",
+        "!include_dir_merge_named scalar"
+    ],
+    "files.associations": {
+        "*.yaml": "yaml",
+        "*.yml": "yaml"
+    },
+    "search.exclude": {
+        "**/build": true,
+        "**/.esphome": true,
+        "**/.venv": true
+    },
+    "files.watcherExclude": {
+        "**/build/**": true,
+        "**/.esphome/**": true,
+        "**/.venv/**": true
+    },
+    "[yaml]": {
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true
+    },
+    "cmake.sourceDirectory": "${workspaceFolder}/tests"
+}

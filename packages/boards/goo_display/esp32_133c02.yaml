@@ -1,0 +1,25 @@
+---
+esp32:
+  board: esp32-s3-devkitc-1
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+psram:
+  mode: octal
+  speed: 80MHz
+  ignore_not_found: false
+logger:
+  hardware_uart: UART0
+  baud_rate: 115200
+  level: INFO
+  logs:
+    epaper_spectra6_133: INFO
+substitutions:
+  epd_clk_pin: '9'
+  epd_data0_pin: '41'
+  epd_data1_pin: '40'
+  epd_cs0_pin: '18'
+  epd_cs1_pin: '17'
+  epd_busy_pin: '7'
+  epd_reset_pin: '6'
+  epd_power_pin: '45'

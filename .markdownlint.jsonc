@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint/main/schema/markdownlint-config-schema.json",
+  "default": true,
+  "MD009": {
+    "br_spaces": 2,
+    "strict": false
+  },
+  "MD032": true,
+  "MD040": true,
+  "MD013": false,
+  "MD060": {
+    "style": "compact"
+  },
+  "MD033": {
+    "allowed_elements": [
+      "details",
+      "summary"
+    ]
+  }
+}

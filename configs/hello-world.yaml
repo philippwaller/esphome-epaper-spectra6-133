@@ -1,0 +1,46 @@
+---
+packages:
+  board: !include ../packages/boards/goo_display/esp32_133c02.yaml
+
+esphome:
+  name: hello-world
+  platformio_options:
+    board_build.psram: enabled
+  on_boot:
+    priority: -100
+    then:
+      - component.update: epd
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+font:
+  - file: gfonts://Montserrat@800
+    id: font_hero
+    size: 260
+
+display:
+  - platform: epaper_spectra6_133
+    id: epd
+    update_interval: never
+    auto_clear_enabled: false
+    cs0_pin: ${epd_cs0_pin}
+    cs1_pin: ${epd_cs1_pin}
+    clk_pin: ${epd_clk_pin}
+    data0_pin: ${epd_data0_pin}
+    data1_pin: ${epd_data1_pin}
+    busy_pin: ${epd_busy_pin}
+    reset_pin: ${epd_reset_pin}
+    power_pin: ${epd_power_pin}
+    lambda: |-
+      const int W = it.get_width();
+
+      const Color BLK = Color(0, 0, 0);
+      const Color WHT = Color(255, 255, 255);
+      const Color RED = Color(255, 0, 0);
+
+      it.fill(WHT);
+      it.print(W / 2, 520, id(font_hero), BLK, TextAlign::CENTER, "HELLO");
+      it.print(W / 2, 860, id(font_hero), RED, TextAlign::CENTER, "WORLD");

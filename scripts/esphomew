@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+readonly ROOT_DIR
+
+readonly ESPHOME_BIN="${ROOT_DIR}/.venv/bin/esphome"
+
+if [[ ! -x "${ESPHOME_BIN}" ]]; then
+  printf 'ESPHome is not installed in %s/.venv yet. Run ./scripts/bootstrap-venv.sh first.\n' "${ROOT_DIR}" >&2
+  exit 1
+fi
+
+cd "${ROOT_DIR}"
+exec "${ESPHOME_BIN}" "$@"

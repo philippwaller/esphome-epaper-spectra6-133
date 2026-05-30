@@ -1,0 +1,36 @@
+---
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    commit-message:
+      prefix: chore
+      include: scope
+    pull-request-branch-name:
+      separator: '-'
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns: ['*']
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:15"
+      timezone: Europe/Berlin
+    commit-message:
+      prefix: chore
+      include: scope
+    pull-request-branch-name:
+      separator: '-'
+    open-pull-requests-limit: 5
+    versioning-strategy: increase-if-necessary
+    groups:
+      python-dependencies:
+        patterns: ['*']

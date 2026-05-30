@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "esphome.esphome-vscode",
+    "ms-python.python",
+    "redhat.vscode-yaml",
+    "ms-vscode.cpptools"
+  ]
+}

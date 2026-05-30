@@ -1,0 +1,126 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  changes:
+    name: Detect Changed Paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_all: >-
+        ${{ github.event_name == 'push' ||
+            github.event_name == 'merge_group' ||
+            github.event_name == 'workflow_dispatch' }}
+      ci: ${{ steps.filter.outputs.ci }}
+      python: ${{ steps.filter.outputs.python }}
+      cpp: ${{ steps.filter.outputs.cpp }}
+      esphome_configs: ${{ steps.filter.outputs.esphome_configs }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            ci:
+              - '.github/workflows/**/*.{yml,yaml}'
+            python:
+              - 'components/epaper_spectra6_133/**/*.py'
+            cpp:
+              - '.clang-format'
+              - 'components/epaper_spectra6_133/**/*.{c,cc,cpp,cxx,h,hh,hpp}'
+              - 'tests/**/*.{c,cc,cpp,cxx,h,hh,hpp}'
+              - 'tests/CMakeLists.txt'
+              - 'requirements-dev.txt'
+              - 'scripts/bootstrap-venv.sh'
+              - 'scripts/run-host-tests.sh'
+            esphome_configs:
+              - 'configs/**/*.{yaml,yml}'
+              - 'packages/**/*.{yaml,yml}'
+              - 'requirements.txt'
+              - 'requirements-dev.txt'
+              - 'scripts/bootstrap-venv.sh'
+              - 'scripts/esphomew'
+              - 'scripts/validate-configs.sh'
+
+  lint:
+    name: Lint and Format Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: .pre-commit-config.yaml
+      - name: Restore pre-commit hook environments
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Install pre-commit
+        run: python -m pip install --disable-pip-version-check pre-commit
+      - name: Run pre-commit checks
+        run: pre-commit run --all-files --show-diff-on-failure
+
+  cpp-tests:
+    name: Host C++ Tests
+    needs: changes
+    if: needs.changes.outputs.run_all == 'true' || needs.changes.outputs.cpp == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: Run host tests and build coverage report
+        run: bash ./scripts/run-host-tests.sh
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: host-cpp-coverage
+          path: build/coverage
+          if-no-files-found: ignore
+
+  esphome-validate:
+    name: ESPHome Config Validation
+    needs: changes
+    if: >-
+      needs.changes.outputs.run_all == 'true' ||
+      needs.changes.outputs.esphome_configs == 'true' ||
+      needs.changes.outputs.python == 'true' ||
+      needs.changes.outputs.cpp == 'true' ||
+      needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Bootstrap virtualenv
+        run: bash ./scripts/bootstrap-venv.sh
+      - name: Prepare secrets file
+        run: cp configs/secrets.example.yaml configs/secrets.yaml
+      - name: Validate all standalone configs
+        run: bash ./scripts/validate-configs.sh

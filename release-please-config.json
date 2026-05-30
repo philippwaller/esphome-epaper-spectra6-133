@@ -1,0 +1,22 @@
+{
+  "release-type": "simple",
+  "include-v-in-tag": true,
+  "include-commit-authors": true,
+  "pull-request-header": "This PR was automatically opened by [Release Please](https://github.com/googleapis/release-please) based on conventional commits since the last release.",
+  "pull-request-footer": "Merge this PR to publish the release. The tag and GitHub Release will be created automatically on merge.",
+  "changelog-sections": [
+    { "type": "feat", "section": "🚀 Features" },
+    { "type": "fix", "section": "🐛 Bug Fixes" },
+    { "type": "perf", "section": "⚡ Performance" },
+    { "type": "refactor", "section": "♻️ Refactoring" },
+    { "type": "docs", "section": "📖 Documentation" },
+    { "type": "chore", "section": "🔧 Maintenance" },
+    { "type": "ci", "section": "👷 CI/CD" },
+    { "type": "test", "section": "✅ Tests" }
+  ],
+  "packages": {
+    ".": {
+      "extra-files": ["README.md"]
+    }
+  }
+}

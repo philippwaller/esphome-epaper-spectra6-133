@@ -1,0 +1,67 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: requirements-txt-fixer
+      - id: check-executables-have-shebangs
+        files: ^scripts/
+      - id: check-yaml
+        args: [--allow-multiple-documents, --unsafe]
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-case-conflict
+      - id: check-merge-conflict
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
+        args: [-ignore, 'label ".+" is unknown']
+        files: ^\.github/workflows/.*\.(yaml|yml)$
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        files: ^(.*\.(yaml|yml)|\.clang-format)$
+        args: [--strict]
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        files: ^scripts/(.*\.sh|esphomew)$
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v22.1.5
+    hooks:
+      - id: clang-format
+        files: ^(components/.*\.(c|cc|cpp|cxx|h|hh|hpp)|ref/GDEP133C02/main/.*\.(c|h))$
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.22.1
+    hooks:
+      - id: markdownlint-cli2
+        args: [--fix]
+        files: ^(CONTRIBUTING\.md|SECURITY\.md)$
+  - repo: local
+    hooks:
+      - id: validate-configs
+        name: validate ESPHome configs
+        entry: bash ./scripts/validate-configs.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: run-host-tests
+        name: run host-side tests
+        entry: bash ./scripts/run-host-tests.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

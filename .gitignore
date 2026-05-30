@@ -1,0 +1,23 @@
+# ESPHome build artifacts
+/.esphome/
+configs/.esphome/
+
+# Gallery generated images
+/configs/images/gallery/
+
+# Secrets (never commit)
+/configs/secrets.yaml
+
+# Python
+/.venv/
+__pycache__/
+*.pyc
+*.pyo
+.ruff_cache/
+
+# Host test and coverage output
+/build/
+tests/build/
+
+# Reference code (local only)
+/ref/
