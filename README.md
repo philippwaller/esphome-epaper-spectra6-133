@@ -71,9 +71,11 @@ external_components:
   - source:
       type: git
       url: https://github.com/philippwaller/esphome-epaper-spectra6-133
-      ref: main
+      ref: v0.1.0
     components: [epaper_spectra6_133]
 ```
+
+Pin the component to a released version so your configuration stays stable and reproducible. To try the latest development state, change `ref` to `main`.
 
 ### 2. Create a minimal configuration
 
@@ -137,7 +139,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/philippwaller/esphome-epaper-spectra6-133
-      ref: main
+      ref: v0.1.0
     components: [epaper_spectra6_133]
 
 font:
