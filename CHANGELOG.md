@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.1.1](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.1.0...v0.1.1) (2026-05-31)
+
+
+### 🐛 Bug Fixes
+
+* **controller:** Harden low-level transfer guards and log invalid inputs ([#8](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/8)) ([2216152](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/2216152e066f69085953b6dc34613d4ddb67a938))
+* Properly override clear() to fix black screen on auto-clear ([#10](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/10)) ([4b83961](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/4b83961912a40d4a81683b00564a7e94c044af02))
+
+
+### 🔧 Maintenance
+
+* **scripts:** Replace bootstrap-venv.sh with unified setup script ([#7](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/7)) ([9b10319](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/9b1031952f7deb50451bd35b708dfaec0c03cc93))
+* Update pre-commit hooks to latest versions ([#3](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/3)) ([994a786](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/994a7863ae3e03189aa69fd56542210e6719a6fe))
+
+
+### 📖 Documentation
+
+* **readme:** Add release-please markers ([#6](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/6)) ([2dcee7f](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/2dcee7f8b750dbbd504fd9e59d13aa0c62782975))
+* Use stable release ref in YAML examples ([#5](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/5)) ([b31c146](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/b31c146f416855432628ea7d69fef401135728d5))
+
 ## [0.1.0](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.0.1...v0.1.0) (2026-05-30)
 
 
