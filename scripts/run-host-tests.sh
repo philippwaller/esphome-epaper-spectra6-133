@@ -17,7 +17,7 @@ else
 fi
 
 if ! "${PYTHON_BIN}" -m gcovr --version >/dev/null 2>&1; then
-  echo "gcovr is not installed for ${PYTHON_BIN}. Run scripts/bootstrap-venv.sh first, or pip install -r requirements-dev.txt." >&2
+  echo "gcovr is not installed for ${PYTHON_BIN}. Run ./scripts/setup.sh first, or pip install -r requirements-dev.txt." >&2
   exit 1
 fi
 

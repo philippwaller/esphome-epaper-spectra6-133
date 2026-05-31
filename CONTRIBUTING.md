@@ -8,7 +8,9 @@ Thank you for your interest in contributing! 🙏
 
 | Requirement | Details |
 | --- | --- |
-| **Python** | 3.x |
+| **Python** | 3.x with `venv` support |
+| **Git** | Required so setup can install the repository hooks |
+| **Shell** | Bash-compatible shell |
 | **Hardware** | ESP32-S3 with PSRAM (for on-device testing) |
 | **Framework** | ESP-IDF — the driver uses the ESP-IDF SPI master API directly |
 | **ESPHome** | ≥ 2026.4.0 (tested with 2026.4.1) |
@@ -24,20 +26,19 @@ git clone https://github.com/philippwaller/esphome-epaper-spectra6-133.git epape
 cd epaper_spectra6_133
 ```
 
-### 2. Bootstrap the virtual environment
+### 2. Run local setup
 
 ```bash
-./scripts/bootstrap-venv.sh
+./scripts/setup.sh
 ```
 
-This creates a local `.venv` with the pinned ESPHome version and all dev dependencies.
+This creates or updates `.venv`, installs the pinned ESPHome and dev tooling,
+creates `configs/secrets.yaml` from the example when missing, and installs the
+required `pre-commit` and `pre-push` Git hooks.
 
-### 3. Install Git hooks
-
-```bash
-./.venv/bin/pre-commit install
-./.venv/bin/pre-commit install --hook-type pre-push
-```
+The generated secrets file contains placeholders for local validation only.
+Replace those values before flashing real hardware. Existing `configs/secrets.yaml`
+files are never overwritten.
 
 The repository ships pre-commit hooks for:
 
@@ -57,7 +58,7 @@ The repository ships pre-commit hooks for:
 - **markdownlint-cli2** — Markdown lint with the repository's relaxed documentation rules
 - **clang-format** — C++ formatting (ESPHome style)
 
-Installed `pre-push` hooks additionally run:
+The required `pre-push` hooks additionally run:
 
 - `bash ./scripts/validate-configs.sh`
 - `bash ./scripts/run-host-tests.sh`
@@ -81,6 +82,13 @@ bash ./scripts/validate-configs.sh
 ```
 
 All standalone configs under `configs/` must validate cleanly before merging.
+If validation reports that ESPHome or `configs/secrets.yaml` is missing, run:
+
+```bash
+./scripts/setup.sh
+```
+
+Then retry validation.
 
 ### Build & flash over USB
 
@@ -109,10 +117,10 @@ Open the workspace and use the pre-configured tasks:
 
 | Task | Description |
 | --- | --- |
-| **Bootstrap venv** | Create/update the local virtual environment |
+| **Setup developer environment** | Prepare `.venv`, local secrets, and required Git hooks |
 | **Validate example configs** | Run `esphomew config` across all standalone example YAMLs |
 | **Run host tests** | Execute the host-side C++ test suite and refresh coverage output |
-| **Run pre-commit hooks** | Run the repository's `yamllint` and `clang-format` hooks across all files |
+| **Run pre-commit hooks** | Run all configured hooks across all files |
 | **Run hello-world config** | Build & flash the minimal Hello World configuration when hardware is connected |
 
 ---
@@ -142,7 +150,8 @@ packages/boards/                    Board-specific YAML packages
     └── esp32_133c02.yaml           ESP32-133C02 board defaults & pin mapping
 
 scripts/
-├── bootstrap-venv.sh               Create local .venv with pinned ESPHome
+├── setup.sh                        Prepare local dev environment, secrets, and hooks
+├── validate-configs.sh             Validate standalone ESPHome example configs
 ├── esphomew                        Wrapper that runs ESPHome inside the venv
 ├── run-host-tests.sh               Build & run C++ unit tests with coverage
 └── convert_image.py                Image → 6-colour palette converter
@@ -166,12 +175,13 @@ tests/
 ## Pull Request Process
 
 1. **Fork** the repository and create a feature branch from `main`.
-2. **Make your changes** — keep PRs focused on a single concern.
-3. **Validate** all standalone example configs: `bash ./scripts/validate-configs.sh`
-4. **Run host C++ tests**: `bash ./scripts/run-host-tests.sh`
-5. **Run hooks**: `./.venv/bin/pre-commit run --all-files`
-6. **Push** and open a Pull Request against `main`.
-7. All CI quality gates must pass before merge.
+2. **Run setup**: `./scripts/setup.sh`
+3. **Make your changes** — keep PRs focused on a single concern.
+4. **Validate** all standalone example configs: `bash ./scripts/validate-configs.sh`
+5. **Run host C++ tests**: `bash ./scripts/run-host-tests.sh`
+6. **Run hooks**: `./.venv/bin/pre-commit run --all-files`
+7. **Push** and open a Pull Request against `main`.
+8. All CI quality gates must pass before merge.
 
 ---
 

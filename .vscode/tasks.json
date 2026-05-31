@@ -2,9 +2,9 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Bootstrap venv",
+			"label": "Setup developer environment",
 			"type": "shell",
-			"command": "${workspaceFolder}/scripts/bootstrap-venv.sh",
+			"command": "${workspaceFolder}/scripts/setup.sh",
 			"problemMatcher": []
 		},
 		{
@@ -14,7 +14,7 @@
 			"args": [
 				"${workspaceFolder}/scripts/validate-configs.sh"
 			],
-			"dependsOn": "Bootstrap venv",
+			"dependsOn": "Setup developer environment",
 			"group": {
 				"kind": "build",
 				"isDefault": true
@@ -28,7 +28,7 @@
 			"args": [
 				"${workspaceFolder}/scripts/run-host-tests.sh"
 			],
-			"dependsOn": "Bootstrap venv",
+			"dependsOn": "Setup developer environment",
 			"group": {
 				"kind": "test",
 				"isDefault": true
@@ -43,7 +43,7 @@
 				"run",
 				"--all-files"
 			],
-			"dependsOn": "Bootstrap venv",
+			"dependsOn": "Setup developer environment",
 			"group": "test",
 			"problemMatcher": []
 		},
@@ -55,7 +55,7 @@
 				"run",
 				"configs/hello-world.yaml"
 			],
-			"dependsOn": "Bootstrap venv",
+			"dependsOn": "Setup developer environment",
 			"group": "build",
 			"problemMatcher": []
 		}
