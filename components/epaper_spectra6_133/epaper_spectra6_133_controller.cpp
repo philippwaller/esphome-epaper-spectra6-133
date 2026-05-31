@@ -471,6 +471,11 @@ bool Controller::begin_region_transfer(const PartialRegion &region) {
              static_cast<unsigned>(region.cs_index));
     return false;
   }
+  if (region.width == 0 || region.height == 0) {
+    ESP_LOGW(CONTROLLER_TAG, "Region transfer start skipped: invalid region dimensions w=%u h=%u",
+             static_cast<unsigned>(region.width), static_cast<unsigned>(region.height));
+    return false;
+  }
 
   if (!this->enable_partial_region(region)) {
     return false;
