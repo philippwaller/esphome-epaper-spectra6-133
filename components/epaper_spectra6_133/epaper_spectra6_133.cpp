@@ -168,14 +168,8 @@ bool EpaperSpectra6133::initialize() {
   return true;
 }
 
-/**
- * @brief Clears the framebuffer to one colour and schedules a full-frame flush.
- *
- * Fills the framebuffer uniformly, then schedules a full-frame flush job that
- * is progressed cooperatively from loop(). Returns immediately.
- *
- * If another display operation is already in progress it is superseded.
- */
+void EpaperSpectra6133::clear() { this->clear(WHITE); }
+
 void EpaperSpectra6133::clear(Color color) {
   fill_buffer_with_code(this->buffer_, color_to_code(color));
   if (!this->ensure_initialized_()) {

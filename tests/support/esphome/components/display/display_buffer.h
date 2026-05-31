@@ -39,6 +39,7 @@ class DisplayBuffer {
   // ---- ESPHome DisplayBuffer interface (stubbed) ----
   virtual DisplayType get_display_type() { return DISPLAY_TYPE_COLOR; }
   virtual void fill(Color) {}
+  virtual void clear() {}
 
   // ---- Internal framebuffer management ----
   uint8_t *buffer_{nullptr};
