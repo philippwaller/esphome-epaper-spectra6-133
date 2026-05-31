@@ -62,9 +62,8 @@ Panels marked 🔄 are expected to work, but have not been confirmed with hardwa
 
 ## 🚀 Quick Start
 
-Follow these three steps to get your Spectra 6 display running in ESPHome.
 
-### 1. Add the external component
+Use this component by importing it directly into your ESPHome configuration. ESPHome will fetch the component from GitHub, build it together with your YAML file, and flash everything to your device.
 
 <!-- x-release-please-start-version -->
 ```yaml
@@ -73,24 +72,38 @@ external_components:
       type: git
       url: https://github.com/philippwaller/esphome-epaper-spectra6-133
       ref: v0.1.1
-    components: [epaper_spectra6_133]
 ```
 <!-- x-release-please-end -->
 
-Pin the component to a released version so your configuration stays stable and reproducible. To try the latest development state, change `ref` to `main`.
+<details>
+<summary><strong>Need unreleased features?</strong> Use the latest development version</summary>
 
-### 2. Create a minimal configuration
+If you want to test changes that are not part of a release yet, point `ref` to `main` instead of a version tag. Adding `refresh: 0s` tells ESPHome to check the Git source on every build.
 
-Set your SPI pin numbers in the `substitutions` block at the top — everything else works on any ESP32-S3 board with PSRAM and the ESP-IDF framework. Add your WiFi credentials to `secrets.yaml`, then flash.
+```yaml
+external_components:
+  - source:
+      type: git
+      url: https://github.com/philippwaller/esphome-epaper-spectra6-133
+      ref: main
+      refresh: 0s
+```
+
+For regular setups, prefer a released version tag. Use `main` when you intentionally want the newest development state.
+
+</details>
+
+### 1. Create your ESPHome YAML
+
+Create a file such as `spectra6-hello.yaml` and paste the configuration below. The example draws a simple `HELLO MAKER` screen and refreshes the panel once after boot.
 
 <!-- x-release-please-start-version -->
 ```yaml
 substitutions:
-  device_name: my-epaper
-  friendly_name: My E-Paper
+  device_name: spectra6-hello
+  friendly_name: Spectra 6 Hello
 
-  # Adjust these pin numbers to match your board's wiring.
-  epd_spi_host: SPI3_HOST
+  # Adjust these pins to match your board.
   epd_cs0_pin: "18"
   epd_cs1_pin: "17"
   epd_clk_pin: "9"
@@ -121,39 +134,29 @@ psram:
 
 logger:
 
-api:
-  encryption:
-    key: !secret api_encryption_key
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
 
 ota:
   - platform: esphome
     password: !secret ota_password
 
-wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  ap:
-    ssid: ${friendly_name}
-    password: "12345678"
-
-captive_portal:
 external_components:
   - source:
       type: git
       url: https://github.com/philippwaller/esphome-epaper-spectra6-133
       ref: v0.1.1
-    components: [epaper_spectra6_133]
 
 font:
   - file: gfonts://Bebas Neue
     id: font_hero
-    size: 240
+    size: 250
 
 display:
   - platform: epaper_spectra6_133
     id: epd
     update_interval: never
-    spi_host: ${epd_spi_host}
     cs0_pin: ${epd_cs0_pin}
     cs1_pin: ${epd_cs1_pin}
     clk_pin: ${epd_clk_pin}
@@ -164,23 +167,36 @@ display:
     power_pin: ${epd_power_pin}
     lambda: |-
       // Textbox with double border and yellow fill
-      it.filled_rectangle(134,  413,  931,  773, Color(0, 0, 0));       // outer thin border (3 px)
-      it.filled_rectangle(137,  416,  925,  767, Color(255, 255, 255)); // white gap (10 px)
-      it.filled_rectangle(147,  426,  905,  747, Color(0, 0, 0));       // inner thick border (12 px)
-      it.filled_rectangle(159,  438,  881,  723, Color(255, 255, 0));   // yellow fill
+      it.filled_rectangle(134, 413, 931, 773, Color(0, 0, 0));
+      it.filled_rectangle(137, 416, 925, 767, Color(255, 255, 255));
+      it.filled_rectangle(147, 426, 905, 747, Color(0, 0, 0));  
+      it.filled_rectangle(159, 438, 881, 723, Color(255, 255, 0));  
 
-      it.print(it.get_width() / 2,  637, id(font_hero), Color(0, 0, 0), TextAlign::CENTER, "HELLO");
-      it.print(it.get_width() / 2,  965, id(font_hero), Color(0, 0, 0), TextAlign::CENTER, "MAKER");
+      it.print(it.get_width() / 2, 637, id(font_hero), Color(0, 0, 0), TextAlign::CENTER, "HELLO");
+      it.print(it.get_width() / 2, 965, id(font_hero), Color(255, 0, 0), TextAlign::CENTER, "MAKER");
 ```
 <!-- x-release-please-end -->
 
-### 3. Flash the device
 
-```bash
-esphome run your-config.yaml
+### 2. Add your secrets
+
+Make sure your ESPHome `secrets.yaml` contains these values:
+
+```yaml
+wifi_ssid: "YOUR_WIFI_NAME"
+wifi_password: "YOUR_WIFI_PASSWORD"
+ota_password: "CHANGE_ME"
 ```
 
-After flashing, the display renders the `HELLO MAKER` screen once. If the panel stays blank, check pin configuration and the PSRAM setting.
+### 3. Flash and enjoy the first render
+
+Connect the ESP32-S3 board by USB and run:
+
+```bash
+esphome run spectra6-hello.yaml
+```
+
+After flashing, the display should render the `HELLO MAKER` screen once.
 
 ## ⚙️ Reference
 

@@ -83,8 +83,14 @@ captive_portal:
 
 external_components:
   - source:
+      # Local source used by this repository for development and CI.
       type: local
       path: ../components
+
+      # In your own ESPHome config, use the released GitHub version instead:
+      # type: git
+      # url: https://github.com/philippwaller/esphome-epaper-spectra6-133
+      # ref: v0.1.1  # x-release-please-version
 
 globals:
   - id: startup_first_render_done
