@@ -387,5 +387,31 @@ TEST_F(EpaperSpectra6133ComponentTest, ClearFillsBufferAndSchedulesFlush) {
   }
 }
 
+// Dispatch through the base DisplayBuffer API to verify the display's white
+// default clear colour is preserved by the override.
+TEST_F(EpaperSpectra6133ComponentTest, BaseClassClearDispatchUsesWhite) {
+  if (display_.buffer_ != nullptr) {
+    std::memset(display_.buffer_, 0x00, FULL_FRAME_SIZE);  // all black
+  }
+
+  // Cast to base class to simulate how ESPHome's internal loop calls clear()
+  esphome::display::DisplayBuffer *base_display = &display_;
+  base_display->clear();
+
+  EXPECT_TRUE(display_.is_busy());
+  EXPECT_EQ(job_type(), AsyncJobType::FLUSH);
+
+  if (display_.buffer_ != nullptr) {
+    bool all_white = true;
+    for (size_t i = 0; i < FULL_FRAME_SIZE; i++) {
+      if (display_.buffer_[i] != 0x11) {
+        all_white = false;
+        break;
+      }
+    }
+    EXPECT_TRUE(all_white);
+  }
+}
+
 }  // namespace epaper_spectra6_133
 }  // namespace esphome

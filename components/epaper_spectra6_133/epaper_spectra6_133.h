@@ -231,18 +231,26 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   display::DisplayType get_display_type() override { return display::DISPLAY_TYPE_COLOR; }
 
   /**
-   * @brief Clears the framebuffer to one colour and schedules a full-frame flush.
+   * @brief Clears the framebuffer to white and schedules a full-frame flush.
    *
-   * Converts @p color to the nearest 4-bit EPD nibble value and fills the
-   * framebuffer uniformly.  Then schedules a full-frame flush job that is
-   * progressed cooperatively from loop().  Returns immediately.
+   * Overrides the inherited display clear behaviour so clear() uses white as
+   * the panel's default background state instead of black.
+   */
+  void clear() override;
+
+  /**
+   * @brief Clears the framebuffer to a specific colour and schedules a full-frame flush.
+   *
+   * Maps @p color to the nearest panel colour, fills the framebuffer
+   * uniformly, and schedules a full-frame flush job that is progressed
+   * cooperatively from loop().
    *
    * If another display operation is already in progress it is superseded:
    * the previous job is cancelled and this one takes its place.
    *
-   * @param color  ESPHome Color to clear to (default: white).
+   * @param color  ESPHome Color to clear to.
    */
-  void clear(Color color = WHITE);
+  void clear(Color color);
 
   /**
    * @brief Schedules a partial update of a logical rectangle and returns immediately.
