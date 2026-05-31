@@ -45,7 +45,8 @@ class Controller {
   bool init_panel();
   /** @brief Executes the PON, DRF, and POF sequence for the current display memory. */
   bool refresh();
-  /** @brief Streams both 600-column controller halves from the packed full framebuffer. */
+  /** @brief Streams both 600-column controller halves from the packed full framebuffer.
+   *  Returns false without issuing transport writes when @p framebuffer is null. */
   bool transfer_full_frame(const uint8_t *framebuffer);
   /**
    * @brief Transfers only the controller-aligned regions touched by a logical rectangle.
@@ -83,22 +84,30 @@ class Controller {
   // until the matching end_* call. All other methods cycle CS internally.
 
   /** @brief Selects CS for @p half (0=IC0, 1=IC1) and sends the DTM command.
+   *  Returns false without touching CS when @p half is outside the valid range.
    *  CS remains LOW after this call.  Call end_half_transfer() when done. */
   bool begin_half_transfer(uint8_t half);
 
   /** @brief Streams one row of HALF_ROW_BYTES to the IC selected by @p half.
+   *  Returns false without issuing transport writes when @p framebuffer is null,
+   *  @p row is outside 0...EPD_HEIGHT-1, or @p half is outside the valid range.
    *  CS must already be LOW (set by begin_half_transfer()). */
   bool write_half_row(const uint8_t *framebuffer, int row, uint8_t half);
 
   /** @brief Releases all CS pins after a half-transfer streaming phase. */
   void end_half_transfer();
 
-  /** @brief Sends CMD66+PTLW+DTM for @p region.  CS for region.cs_index
-   *  remains LOW after this call.  Call end_region_transfer() when done. */
+  /** @brief Sends CMD66+PTLW+DTM for @p region.  Returns false without
+   *  issuing transport writes when region.cs_index is outside the valid range.
+   *  CS for region.cs_index remains LOW after this call.  Call
+   *  end_region_transfer() when done. */
   bool begin_region_transfer(const PartialRegion &region);
 
   /** @brief Streams one row of pixel data for @p region's IC.
-   *  CS must already be LOW (set by begin_region_transfer()). */
+   *  Returns false without issuing transport writes when @p framebuffer is null,
+   *  region.cs_index is outside the valid range, or @p row is outside
+   *  0...region.height-1.  CS must already be LOW (set by
+   *  begin_region_transfer()). */
   bool write_region_row(const uint8_t *framebuffer, const PartialRegion &region, int row);
 
   /** @brief Releases all CS pins after a region streaming phase. */
@@ -106,7 +115,9 @@ class Controller {
 
   /** @brief Programs a minimal 16×2 dummy PTLW on @p cs_index so that a
    *  subsequent DRF does not trigger a full-screen refresh on that IC.
-   *  No DTM data is sent.  Fully atomic: CS cycles internally. */
+   *  Returns false without issuing transport writes when @p cs_index is
+   *  outside the valid range.  No DTM data is sent.  Fully atomic: CS cycles
+   *  internally. */
   bool arm_dummy_region(uint8_t cs_index);
 
   /** @brief Computes aligned PartialRegion descriptors for both ICs from a
