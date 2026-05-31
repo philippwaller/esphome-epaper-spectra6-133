@@ -1020,7 +1020,7 @@ def _import_pillow():
         from PIL import Image, ImageEnhance, ImageFilter, ImageOps
     except ImportError as exc:
         raise SystemExit(
-            "Pillow is required. Run ./scripts/bootstrap-venv.sh to set up the environment."
+            "Pillow is required. Run ./scripts/setup.sh to set up the environment."
         ) from exc
     return Image, ImageEnhance, ImageFilter, ImageOps
 

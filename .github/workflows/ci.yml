@@ -43,15 +43,15 @@ jobs:
               - 'tests/**/*.{c,cc,cpp,cxx,h,hh,hpp}'
               - 'tests/CMakeLists.txt'
               - 'requirements-dev.txt'
-              - 'scripts/bootstrap-venv.sh'
+              - 'scripts/setup.sh'
               - 'scripts/run-host-tests.sh'
             esphome_configs:
               - 'configs/**/*.{yaml,yml}'
               - 'packages/**/*.{yaml,yml}'
               - 'requirements.txt'
               - 'requirements-dev.txt'
-              - 'scripts/bootstrap-venv.sh'
               - 'scripts/esphomew'
+              - 'scripts/setup.sh'
               - 'scripts/validate-configs.sh'
 
   lint:
@@ -117,10 +117,8 @@ jobs:
         with:
           python-version: '3.13'
           cache: pip
-          cache-dependency-path: requirements.txt
-      - name: Bootstrap virtualenv
-        run: bash ./scripts/bootstrap-venv.sh
-      - name: Prepare secrets file
-        run: cp configs/secrets.example.yaml configs/secrets.yaml
+          cache-dependency-path: requirements-dev.txt
+      - name: Set up local developer environment
+        run: bash ./scripts/setup.sh
       - name: Validate all standalone configs
         run: bash ./scripts/validate-configs.sh

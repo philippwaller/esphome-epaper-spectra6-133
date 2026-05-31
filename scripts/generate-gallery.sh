@@ -21,7 +21,7 @@ mkdir -p "$OUTPUT_DIR"
 
 # Ensure venv exists
 if [ ! -f "${REPO_ROOT}/.venv/bin/python" ]; then
-    echo "Virtual environment not found. Run ./scripts/bootstrap-venv.sh first."
+    echo "Virtual environment not found. Run ./scripts/setup.sh first."
     exit 1
 fi
 

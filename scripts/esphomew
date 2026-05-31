@@ -10,7 +10,10 @@ readonly ROOT_DIR
 readonly ESPHOME_BIN="${ROOT_DIR}/.venv/bin/esphome"
 
 if [[ ! -x "${ESPHOME_BIN}" ]]; then
-  printf 'ESPHome is not installed in %s/.venv yet. Run ./scripts/bootstrap-venv.sh first.\n' "${ROOT_DIR}" >&2
+  cat >&2 <<'EOF'
+ESPHome is not installed in the local virtual environment.
+Run ./scripts/setup.sh first, then retry the ESPHome command.
+EOF
   exit 1
 fi
 
