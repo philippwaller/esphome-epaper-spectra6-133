@@ -127,6 +127,11 @@ TEST_F(ControllerTest, RefreshSendsPonDrfPofSequence) {
   EXPECT_EQ(delays(state().operations), (std::vector<uint32_t>{30U}));
 }
 
+TEST_F(ControllerTest, TransferFullFrameReturnsFalseForNullFramebuffer) {
+  EXPECT_FALSE(controller_.transfer_full_frame(nullptr));
+  EXPECT_TRUE(state().operations.empty());
+}
+
 TEST_F(ControllerTest, TransferRegionAlignsSingleHalfAndArmsDummyRegionOnOtherHalf) {
   const auto framebuffer = make_framebuffer_pattern();
 
@@ -232,6 +237,13 @@ TEST_F(ControllerTest, BeginHalfTransferIc1SendsDtmToIc1AndLeavesCs1Low) {
   controller_.end_half_transfer();
 }
 
+TEST_F(ControllerTest, BeginHalfTransferReturnsFalseForInvalidHalfIndex) {
+  EXPECT_FALSE(controller_.begin_half_transfer(2));
+  EXPECT_TRUE(state().operations.empty());
+  EXPECT_EQ(state().cs_levels[0], 1U);
+  EXPECT_EQ(state().cs_levels[1], 1U);
+}
+
 // write_half_row() sends exactly HALF_ROW_BYTES of the correct slice of the framebuffer.
 TEST_F(ControllerTest, WriteHalfRowSendsHalfRowBytesAtCorrectOffset) {
   const auto framebuffer = make_framebuffer_pattern();
@@ -252,6 +264,25 @@ TEST_F(ControllerTest, WriteHalfRowSendsHalfRowBytesAtCorrectOffset) {
                                  framebuffer.begin() + static_cast<std::ptrdiff_t>(expected_offset + HALF_ROW_BYTES)));
 
   controller_.end_half_transfer();
+}
+
+TEST_F(ControllerTest, WriteHalfRowReturnsFalseForInvalidInputs) {
+  const auto framebuffer = make_framebuffer_pattern();
+
+  EXPECT_FALSE(controller_.write_half_row(nullptr, 0, 0));
+  EXPECT_TRUE(state().operations.empty());
+
+  test_support::reset_transport_state(transport_);
+  EXPECT_FALSE(controller_.write_half_row(framebuffer.data(), -1, 0));
+  EXPECT_TRUE(state().operations.empty());
+
+  test_support::reset_transport_state(transport_);
+  EXPECT_FALSE(controller_.write_half_row(framebuffer.data(), EPD_HEIGHT, 0));
+  EXPECT_TRUE(state().operations.empty());
+
+  test_support::reset_transport_state(transport_);
+  EXPECT_FALSE(controller_.write_half_row(framebuffer.data(), 0, 2));
+  EXPECT_TRUE(state().operations.empty());
 }
 
 // end_half_transfer() raises both CS pins.
@@ -295,6 +326,41 @@ TEST_F(ControllerTest, BeginRegionTransferSendsCmd66PtlwThenDtmAndLeavesCs0Low) 
   controller_.end_region_transfer(regions[0].cs_index);
 }
 
+TEST_F(ControllerTest, BeginRegionTransferReturnsFalseForInvalidCsIndex) {
+  PartialRegion regions[2]{};
+  bool has_region[2]{};
+  controller_.compute_partial_regions(0, 0, 100, 100, regions, has_region);
+  ASSERT_TRUE(has_region[0]);
+  regions[0].cs_index = 2;
+
+  EXPECT_FALSE(controller_.begin_region_transfer(regions[0]));
+  EXPECT_TRUE(state().operations.empty());
+}
+
+TEST_F(ControllerTest, WriteRegionRowReturnsFalseForInvalidInputs) {
+  const auto framebuffer = make_framebuffer_pattern();
+  PartialRegion regions[2]{};
+  bool has_region[2]{};
+  controller_.compute_partial_regions(0, 0, 100, 100, regions, has_region);
+  ASSERT_TRUE(has_region[0]);
+
+  EXPECT_FALSE(controller_.write_region_row(nullptr, regions[0], 0));
+  EXPECT_TRUE(state().operations.empty());
+
+  test_support::reset_transport_state(transport_);
+  EXPECT_FALSE(controller_.write_region_row(framebuffer.data(), regions[0], -1));
+  EXPECT_TRUE(state().operations.empty());
+
+  test_support::reset_transport_state(transport_);
+  EXPECT_FALSE(controller_.write_region_row(framebuffer.data(), regions[0], regions[0].height));
+  EXPECT_TRUE(state().operations.empty());
+
+  test_support::reset_transport_state(transport_);
+  regions[0].cs_index = 2;
+  EXPECT_FALSE(controller_.write_region_row(framebuffer.data(), regions[0], 0));
+  EXPECT_TRUE(state().operations.empty());
+}
+
 // arm_dummy_region() sends CMD66+PTLW with no subsequent DTM.
 TEST_F(ControllerTest, ArmDummyRegionSendsCmd66PtlwWithoutDtm) {
   ASSERT_TRUE(controller_.init_panel());
@@ -314,6 +380,11 @@ TEST_F(ControllerTest, ArmDummyRegionSendsCmd66PtlwWithoutDtm) {
   // CS is fully released after the call (atomic operation).
   EXPECT_EQ(state().cs_levels[0], 1U);
   EXPECT_EQ(state().cs_levels[1], 1U);
+}
+
+TEST_F(ControllerTest, ArmDummyRegionReturnsFalseForInvalidCsIndex) {
+  EXPECT_FALSE(controller_.arm_dummy_region(2));
+  EXPECT_TRUE(state().operations.empty());
 }
 
 // send_refresh_pon() emits the PON write_command.

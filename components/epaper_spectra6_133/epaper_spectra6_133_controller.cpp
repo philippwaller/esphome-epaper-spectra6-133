@@ -232,6 +232,11 @@ bool Controller::refresh() {
  * can reuse the same streaming logic.
  */
 bool Controller::transfer_full_frame(const uint8_t *framebuffer) {
+  if (framebuffer == nullptr) {
+    ESP_LOGW(CONTROLLER_TAG, "Full-frame transfer skipped: framebuffer is null");
+    return false;
+  }
+
   for (uint8_t half = 0; half < 2; half++) {
     if (!this->begin_half_transfer(half)) {
       return false;
@@ -275,7 +280,12 @@ bool Controller::transfer_full_frame(const uint8_t *framebuffer) {
  *   See the header comment on transfer_region() for background.
  */
 bool Controller::transfer_region(const uint8_t *framebuffer, int x, int y, int width, int height) {
-  if (framebuffer == nullptr || width <= 0 || height <= 0) {
+  if (framebuffer == nullptr) {
+    ESP_LOGW(CONTROLLER_TAG, "Partial refresh skipped: framebuffer is null");
+    return false;
+  }
+  if (width <= 0 || height <= 0) {
+    ESP_LOGW(CONTROLLER_TAG, "Partial refresh skipped: invalid rectangle x=%d y=%d w=%d h=%d", x, y, width, height);
     return false;
   }
 
@@ -409,6 +419,11 @@ bool Controller::probe_drivers() {
  * call end_half_transfer() to release CS before any other operation.
  */
 bool Controller::begin_half_transfer(uint8_t half) {
+  if (half > 1) {
+    ESP_LOGW(CONTROLLER_TAG, "Half transfer start skipped: invalid half index %u", static_cast<unsigned>(half));
+    return false;
+  }
+
   this->transport_.set_cs(half, 0);
   if (this->transport_.write_command(DTM) != ESP_OK) {
     this->transport_.set_cs_all(1);
@@ -424,6 +439,19 @@ bool Controller::begin_half_transfer(uint8_t half) {
  * Row @p row is the logical 0-based panel row (0 … EPD_HEIGHT-1).
  */
 bool Controller::write_half_row(const uint8_t *framebuffer, int row, uint8_t half) {
+  if (framebuffer == nullptr) {
+    ESP_LOGW(CONTROLLER_TAG, "Half-row write skipped: framebuffer is null");
+    return false;
+  }
+  if (row < 0 || row >= EPD_HEIGHT) {
+    ESP_LOGW(CONTROLLER_TAG, "Half-row write skipped: row %d is outside 0...%d", row, EPD_HEIGHT - 1);
+    return false;
+  }
+  if (half > 1) {
+    ESP_LOGW(CONTROLLER_TAG, "Half-row write skipped: invalid half index %u", static_cast<unsigned>(half));
+    return false;
+  }
+
   const size_t offset = static_cast<size_t>(row) * ROW_BYTES + (half == 0 ? 0 : HALF_ROW_BYTES);
   return this->transport_.write_data(framebuffer + offset, HALF_ROW_BYTES) == ESP_OK;
 }
@@ -438,6 +466,12 @@ void Controller::end_half_transfer() { this->transport_.set_cs_all(1); }
  * call end_region_transfer() to release CS before any other operation.
  */
 bool Controller::begin_region_transfer(const PartialRegion &region) {
+  if (region.cs_index > 1) {
+    ESP_LOGW(CONTROLLER_TAG, "Region transfer start skipped: invalid cs_index %u",
+             static_cast<unsigned>(region.cs_index));
+    return false;
+  }
+
   if (!this->enable_partial_region(region)) {
     return false;
   }
@@ -457,6 +491,20 @@ bool Controller::begin_region_transfer(const PartialRegion &region) {
  * @p row is 0-based within the region's height (0 … region.height-1).
  */
 bool Controller::write_region_row(const uint8_t *framebuffer, const PartialRegion &region, int row) {
+  if (framebuffer == nullptr) {
+    ESP_LOGW(CONTROLLER_TAG, "Region-row write skipped: framebuffer is null");
+    return false;
+  }
+  if (region.cs_index > 1) {
+    ESP_LOGW(CONTROLLER_TAG, "Region-row write skipped: invalid cs_index %u", static_cast<unsigned>(region.cs_index));
+    return false;
+  }
+  if (row < 0 || row >= region.height) {
+    ESP_LOGW(CONTROLLER_TAG, "Region-row write skipped: row %d is outside 0...%u", row,
+             static_cast<unsigned>(region.height - 1));
+    return false;
+  }
+
   const size_t row_index = static_cast<size_t>(region.y_start + static_cast<uint16_t>(row)) * ROW_BYTES;
   const uint8_t *row_ptr = framebuffer + row_index + region.row_byte_offset;
   return this->transport_.write_data(row_ptr, region.row_byte_count) == ESP_OK;
@@ -474,6 +522,11 @@ void Controller::end_region_transfer(uint8_t /*cs_index*/) { this->transport_.se
  * Fully atomic: CS cycles internally via enable_partial_region().
  */
 bool Controller::arm_dummy_region(uint8_t cs_index) {
+  if (cs_index > 1) {
+    ESP_LOGW(CONTROLLER_TAG, "Dummy region skipped: invalid cs_index %u", static_cast<unsigned>(cs_index));
+    return false;
+  }
+
   PartialRegion dummy{};
   dummy.cs_index = cs_index;
   dummy.x_start = 0;
@@ -565,6 +618,10 @@ void Controller::disable_partial_regions() {
  * vertical bounds are encoded in two-row units as required by the panel.
  */
 bool Controller::enable_partial_region(const PartialRegion &region) {
+  if (region.cs_index > 1) {
+    return false;
+  }
+
   const uint8_t cmd66[] = {0x49, 0x55, 0x13, 0x5D, 0x05, 0x10};
   // The controller's horizontal region is expressed in pixels inside
   // one 600-column half, while the vertical coordinates are addressed
