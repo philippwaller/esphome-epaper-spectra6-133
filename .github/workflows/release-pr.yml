@@ -20,7 +20,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Resolve Token
+        id: resolve-token
+        run: |
+          if [ -z "${{ secrets.RELEASE_PLEASE_TOKEN }}" ]; then
+            echo "::warning title=Release token missing::Using GITHUB_TOKEN for this release. Follow-up workflows will not be triggered. Configure RELEASE_PLEASE_TOKEN with a PAT to enable them."
+            echo "token=${{ secrets.GITHUB_TOKEN }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=${{ secrets.RELEASE_PLEASE_TOKEN }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: googleapis/release-please-action@v5
         with:
+          token: ${{ steps.resolve-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
