@@ -31,7 +31,10 @@ configs=()
 if [[ $# -gt 0 ]]; then
   configs=("$@")
 else
-  resolved_configs="$("${PYTHON_BIN}" "${ROOT_DIR}/scripts/esphome-versions.py" compile-configs)"
+  if ! resolved_configs="$("${PYTHON_BIN}" "${ROOT_DIR}/scripts/esphome-versions.py" compile-configs)"; then
+    echo "Failed to resolve compile smoke-test configs." >&2
+    exit 1
+  fi
   while IFS= read -r config; do
     [[ -n "${config}" ]] || continue
     configs+=("${config}")

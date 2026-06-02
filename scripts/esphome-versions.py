@@ -325,11 +325,17 @@ def versions_for_mode(versions: list[str], mode: str) -> list[str]:
     if mode in {"validate", "validate-default"}:
         return validate_versions_default(versions)
     if mode == "validate-full":
-        return validate_versions_full(versions)
+        resolved = validate_versions_full(versions)
+        if not resolved:
+            raise ValueError(f"No versions resolved for mode {mode}")
+        return resolved
     if mode in {"compile", "compile-default"}:
         return compile_versions_default(versions)
     if mode == "compile-full":
-        return compile_versions_full(versions)
+        resolved = compile_versions_full(versions)
+        if not resolved:
+            raise ValueError(f"No versions resolved for mode {mode}")
+        return resolved
     raise ValueError(f"Unsupported matrix mode: {mode}")
 
 
@@ -610,7 +616,7 @@ def sync_support_files(args: argparse.Namespace) -> None:
         changed = ", ".join(str(path.relative_to(ROOT_DIR)) for path in changed_paths)
         raise ValueError(
             "Support-derived files are out of date. Run "
-            "python scripts/esphome-versions.py sync. "
+            "./.venv/bin/python scripts/esphome-versions.py sync. "
             f"Changed: {changed}"
         )
 

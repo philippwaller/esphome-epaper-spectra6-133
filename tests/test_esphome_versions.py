@@ -117,6 +117,17 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
 
         self.assertEqual(versions, ["2026.1.0", "2026.1.5", "2026.2.3", "2026.3.1"])
 
+    def test_versions_for_mode_rejects_empty_full_modes(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError, "No versions resolved for mode validate-full"
+        ):
+            MODULE.versions_for_mode([], "validate-full")
+
+        with self.assertRaisesRegex(
+            ValueError, "No versions resolved for mode compile-full"
+        ):
+            MODULE.versions_for_mode([], "compile-full")
+
     def test_apply_managed_specifier_sync_replaces_plain_and_encoded_matches(
         self,
     ) -> None:
