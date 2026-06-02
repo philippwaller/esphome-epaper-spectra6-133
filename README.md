@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 <!-- Don't update the ESPHome support snippets manually. Update requirements.txt and run scripts/esphome-versions.py sync. -->
 <!-- x-esphome-version-specifier -->
-[![ESPHome](https://img.shields.io/badge/ESPHome-%3E%3D%202025.7.0-000000?logo=esphome&logoColor=white)](https://esphome.io)
+[![ESPHome](https://img.shields.io/badge/ESPHome-%3E%3D%202025.11.0-000000?logo=esphome&logoColor=white)](https://esphome.io)
 [![GitHub Release](https://img.shields.io/github/v/release/philippwaller/esphome-epaper-spectra6-133?logo=github)](https://github.com/philippwaller/esphome-epaper-spectra6-133/releases)
 [![CI](https://github.com/philippwaller/esphome-epaper-spectra6-133/actions/workflows/ci.yml/badge.svg)](https://github.com/philippwaller/esphome-epaper-spectra6-133/actions/workflows/ci.yml)
 
@@ -38,7 +38,7 @@ A ESPHome display component for large-format 13.3″ Spectra 6 e-paper panels. I
 <!-- x-esphome-version-specifier-start -->
 | What | Details |
 | ------ | --------- |
-| **ESPHome** | >= 2025.7.0 |
+| **ESPHome** | >= 2025.11.0 |
 | **Board** | ESP32 with PSRAM |
 | **Display** | 13.3″ Spectra 6 panel |
 | **Framework** | ESP-IDF (Arduino is **not** supported) |
