@@ -31,9 +31,10 @@ configs=()
 if [[ $# -gt 0 ]]; then
   configs=("$@")
 else
+  resolved_configs="$("${PYTHON_BIN}" "${ROOT_DIR}/scripts/esphome-versions.py" compile-configs)"
   while IFS= read -r config; do
     configs+=("${config}")
-  done < <("${PYTHON_BIN}" "${ROOT_DIR}/scripts/esphome-versions.py" compile-configs)
+  done <<< "${resolved_configs}"
 fi
 
 if [[ ${#configs[@]} -eq 0 ]]; then
