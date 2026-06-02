@@ -1,4 +1,4 @@
-name: ESPHome Compatibility Full Monthly
+name: ESPHome Compatibility Monthly
 "on":
   schedule:
     - cron: '0 3 1 * *'
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   full-matrix:
-    name: Run Monthly Full Matrix
+    name: Run Full Matrix
     uses: ./.github/workflows/esphome-compatibility.yml
     with:
       run_mode: full

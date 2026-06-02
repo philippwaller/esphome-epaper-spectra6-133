@@ -1,0 +1,110 @@
+name: ESPHome Compatibility Release Watch
+"on":
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: esphome-compatibility-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version-check:
+    name: Watch Latest ESPHome Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+      current_version: ${{ steps.current.outputs.current_version }}
+      previous_version: ${{ steps.previous.outputs.previous_version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python-env
+      - name: Install script dependencies
+        run: pip install --disable-pip-version-check "packaging>=24"
+      - name: Resolve artifact name
+        id: artifact
+        run: |
+          ref_hash="$(echo -n "$GITHUB_REF" | sha256sum | cut -c1-8)"
+          echo "name=latest-esphome-version-${ref_hash}" >> "$GITHUB_OUTPUT"
+      - name: Resolve latest ESPHome version
+        id: current
+        run: |
+          mkdir -p artifacts
+          python scripts/esphome-versions.py latest --include-prereleases --format json > artifacts/latest-version.json
+          current_version="$(
+            python -c 'import json; print(json.load(open("artifacts/latest-version.json", encoding="utf-8"))["version"])'
+          )"
+          echo "current_version=${current_version}" >> "$GITHUB_OUTPUT"
+          echo "Current ESPHome version: ${current_version}"
+      - name: Download previous ESPHome version artifact
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: ${{ steps.artifact.outputs.name }}
+        run: |
+          mkdir -p previous-artifact
+          artifact_url="$(
+            gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/artifacts" -f "name=${ARTIFACT_NAME}" -f per_page=100 \
+              --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].archive_download_url // ""'
+          )"
+
+          if [[ -z "${artifact_url}" ]]; then
+            echo "No previous ${ARTIFACT_NAME} artifact found."
+            echo "previous_version=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -L "${artifact_url}" \
+            -o previous-artifact.zip
+          unzip -q -o previous-artifact.zip -d previous-artifact
+
+          previous_file="$(find previous-artifact -type f -name latest-version.json | head -n 1)"
+          if [[ -z "${previous_file}" ]]; then
+            echo "Previous artifact did not contain latest-version.json."
+            echo "previous_version=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          previous_version="$(
+            python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("version", ""))' "${previous_file}"
+          )"
+          echo "previous_version=${previous_version}" >> "$GITHUB_OUTPUT"
+          echo "Previous ESPHome version: ${previous_version}"
+      - name: Compare ESPHome versions
+        id: compare
+        env:
+          CURRENT_VERSION: ${{ steps.current.outputs.current_version }}
+          PREVIOUS_VERSION: ${{ steps.previous.outputs.previous_version }}
+        run: |
+          if [[ -z "${PREVIOUS_VERSION}" || "${CURRENT_VERSION}" != "${PREVIOUS_VERSION}" ]]; then
+            changed="true"
+          else
+            changed="false"
+          fi
+
+          echo "changed=${changed}" >> "$GITHUB_OUTPUT"
+          echo "Version changed: ${changed}"
+      - name: Upload latest ESPHome version artifact
+        if: always() && steps.current.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: artifacts/latest-version.json
+          if-no-files-found: error
+
+  esphome-compatibility:
+    name: Run Release Compatibility
+    needs: version-check
+    if: needs.version-check.outputs.changed == 'true'
+    uses: ./.github/workflows/esphome-compatibility.yml
+    with:
+      run_mode: default
+      include_prereleases: true

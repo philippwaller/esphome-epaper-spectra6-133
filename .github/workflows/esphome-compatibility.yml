@@ -1,7 +1,5 @@
 name: ESPHome Compatibility
 "on":
-  schedule:
-    - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       run_mode:
@@ -12,13 +10,22 @@ name: ESPHome Compatibility
         options:
           - full
           - default
-          - release-check
+      include_prereleases:
+        description: Include ESPHome pre-releases in the resolved matrix
+        required: false
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       run_mode:
         description: Regression run mode
         required: true
         type: string
+      include_prereleases:
+        description: Include ESPHome pre-releases in the resolved matrix
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   actions: read
@@ -39,14 +46,10 @@ jobs:
       - name: Resolve requested mode
         id: mode
         run: |
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            mode="release-check"
-          else
-            mode="${{ inputs.run_mode }}"
-          fi
+          mode="${{ inputs.run_mode }}"
 
           case "${mode}" in
-            full|default|release-check)
+            full|default)
               ;;
             *)
               echo "Unsupported regression mode: ${mode}" >&2
@@ -57,110 +60,10 @@ jobs:
           echo "mode=${mode}" >> "$GITHUB_OUTPUT"
           echo "Resolved regression mode: ${mode}"
 
-  release-check:
-    name: Check Latest ESPHome Release
-    needs: run-mode
-    if: needs.run-mode.outputs.mode == 'release-check'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      changed: ${{ steps.compare.outputs.changed }}
-      current_version: ${{ steps.current.outputs.current_version }}
-      previous_version: ${{ steps.previous.outputs.previous_version }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-python-env
-      - name: Install script dependencies
-        run: pip install --disable-pip-version-check "packaging>=24"
-      - name: Resolve artifact name
-        id: artifact
-        run: |
-          ref_hash="$(echo -n "$GITHUB_REF" | sha256sum | cut -c1-8)"
-          echo "name=latest-esphome-version-${ref_hash}" >> "$GITHUB_OUTPUT"
-      - name: Resolve latest ESPHome version
-        id: current
-        run: |
-          mkdir -p artifacts
-          python scripts/esphome-versions.py latest --include-prereleases --format json > artifacts/latest-version.json
-          current_version="$(
-            python -c 'import json; print(json.load(open("artifacts/latest-version.json", encoding="utf-8"))["version"])'
-          )"
-          echo "current_version=${current_version}" >> "$GITHUB_OUTPUT"
-          echo "Current ESPHome version: ${current_version}"
-      - name: Download previous ESPHome version artifact
-        id: previous
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ steps.artifact.outputs.name }}
-        run: |
-          mkdir -p previous-artifact
-          artifact_url="$(
-            gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/artifacts" -f "name=${ARTIFACT_NAME}" -f per_page=20 \
-              --jq '.artifacts[] | select(.expired == false) | .archive_download_url' \
-              | head -n 1
-          )"
-
-          if [[ -z "${artifact_url}" ]]; then
-            echo "No previous ${ARTIFACT_NAME} artifact found."
-            echo "previous_version=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          curl -fsSL \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -L "${artifact_url}" \
-            -o previous-artifact.zip
-          unzip -q -o previous-artifact.zip -d previous-artifact
-
-          previous_file="$(find previous-artifact -type f -name latest-version.json | head -n 1)"
-          if [[ -z "${previous_file}" ]]; then
-            echo "Previous artifact did not contain latest-version.json."
-            echo "previous_version=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          previous_version="$(
-            python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("version", ""))' "${previous_file}"
-          )"
-          echo "previous_version=${previous_version}" >> "$GITHUB_OUTPUT"
-          echo "Previous ESPHome version: ${previous_version}"
-      - name: Compare ESPHome versions
-        id: compare
-        env:
-          CURRENT_VERSION: ${{ steps.current.outputs.current_version }}
-          PREVIOUS_VERSION: ${{ steps.previous.outputs.previous_version }}
-        run: |
-          if [[ -z "${PREVIOUS_VERSION}" || "${CURRENT_VERSION}" != "${PREVIOUS_VERSION}" ]]; then
-            changed="true"
-          else
-            changed="false"
-          fi
-
-          echo "changed=${changed}" >> "$GITHUB_OUTPUT"
-          echo "Version changed: ${changed}"
-      - name: Upload latest ESPHome version artifact
-        if: always() && steps.current.outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ steps.artifact.outputs.name }}
-          path: artifacts/latest-version.json
-          if-no-files-found: error
-
   esphome-matrix:
     name: ESPHome Version Matrix
-    needs:
-      - run-mode
-      - release-check
-    if: >-
-      ${{
-        always() &&
-        needs.run-mode.result == 'success' &&
-        (
-          needs.run-mode.outputs.mode != 'release-check' ||
-          needs.release-check.outputs.changed == 'true'
-        )
-      }}
+    needs: run-mode
+    if: needs.run-mode.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -177,8 +80,13 @@ jobs:
         id: matrix
         env:
           RUN_MODE: ${{ needs.run-mode.outputs.mode }}
+          INCLUDE_PRERELEASES: ${{ inputs.include_prereleases }}
         run: |
           query_flags=()
+          if [[ "${INCLUDE_PRERELEASES}" == "true" ]]; then
+            query_flags+=(--include-prereleases)
+          fi
+
           case "${RUN_MODE}" in
             full)
               validate_mode="validate-full"
@@ -189,12 +97,6 @@ jobs:
               validate_mode="validate-default"
               compile_mode="compile-default"
               run_label="Default"
-              ;;
-            release-check)
-              validate_mode="validate-default"
-              compile_mode="compile-default"
-              query_flags+=(--include-prereleases)
-              run_label="Release Check"
               ;;
             *)
               echo "Unsupported regression mode: ${RUN_MODE}" >&2
