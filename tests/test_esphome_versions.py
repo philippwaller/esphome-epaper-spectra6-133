@@ -193,6 +193,40 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         self.assertIn("| **Shell** | Bash-compatible shell |", rendered)
         self.assertNotIn(">= 2025.9.4, < 2026.1.0", rendered)
 
+    def test_apply_managed_specifier_sync_replaces_arbitrary_equality_literals(
+        self,
+    ) -> None:
+        readme = textwrap.dedent(
+            f"""\
+            Intro
+            {MODULE.VERSION_SPECIFIER_LINE_MARKER}
+            [![ESPHome](https://img.shields.io/badge/ESPHome-%3D%3D%3D%20foo-bar%2Frc%5B1%5D%40local%3Atag-000000?logo=esphome&logoColor=white)](https://esphome.io)
+
+            {MODULE.VERSION_SPECIFIER_BLOCK_START}
+            ESPHome === foo-bar/rc[1]@local:tag
+            {MODULE.VERSION_SPECIFIER_BLOCK_END}
+            """
+        )
+
+        plain_pattern, encoded_pattern = MODULE.build_specifier_patterns(
+            "esphome",
+            "===foo-baz/rc[2]@local:tag",
+        )
+
+        rendered = MODULE.apply_managed_specifier_sync(
+            readme,
+            plain_pattern=plain_pattern,
+            encoded_pattern=encoded_pattern,
+            specifier_display="=== foo-baz/rc[2]@local:tag",
+        )
+
+        self.assertIn("ESPHome === foo-baz/rc[2]@local:tag", rendered)
+        self.assertIn(
+            "ESPHome-%3D%3D%3D%20foo-baz%2Frc%5B2%5D%40local%3Atag-000000?",
+            rendered,
+        )
+        self.assertNotIn("foo-bar", rendered)
+
     def test_replace_marked_block_requires_balanced_markers(self) -> None:
         with self.assertRaisesRegex(ValueError, "missing"):
             MODULE.replace_marked_block(

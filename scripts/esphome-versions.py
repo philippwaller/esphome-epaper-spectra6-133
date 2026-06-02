@@ -43,8 +43,17 @@ VERSION_SPECIFIER_BLOCK_START = "<!-- x-esphome-version-specifier-start -->"
 VERSION_SPECIFIER_BLOCK_END = "<!-- x-esphome-version-specifier-end -->"
 VERSION_SPECIFIER_LINE_MARKER = "<!-- x-esphome-version-specifier -->"
 SPECIFIER_OPERATORS = ("===", ">=", "<=", "~=", "!=", "==", ">", "<")
-PLAIN_SPECIFIER_VERSION_PATTERN = r"[A-Za-z0-9][A-Za-z0-9._!*+~]*"
-ENCODED_SPECIFIER_VERSION_PATTERN = r"(?:[A-Za-z0-9._~]|%(?:21|2A|2a|2B|2b))+"
+PLAIN_SPECIFIER_VERSION_PATTERN = r"[^\s;,)]+"
+# URL-encoded specifier literals may contain almost any non-space character for
+# arbitrary equality (===). Keep the match lazy and require a URL/text boundary
+# so badge suffixes such as "-000000?logo=..." are not consumed as version text.
+ENCODED_SPECIFIER_VERSION_PATTERN = (
+    r"(?:[A-Za-z0-9._~-]|%(?!(?:09|0A|0a|0B|0b|0C|0c|0D|0d|20|29|2C|2c|3B|3b))"
+    r"[0-9A-Fa-f]{2})+?"
+)
+ENCODED_SPECIFIER_BOUNDARY_PATTERN = (
+    r"(?=$|[\s\])}>]|[?&#]|-(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})(?:$|[/?#&]))"
+)
 
 
 @dataclass(frozen=True)
@@ -270,6 +279,7 @@ def build_specifier_patterns(
         rf"(?:{ENCODED_SPECIFIER_VERSION_PATTERN})"
         rf"(?:(?:%20)*%2C(?:%20)*(?:{encoded_operator_alternation})"
         rf"(?:%20)*(?:{ENCODED_SPECIFIER_VERSION_PATTERN}))*"
+        rf"{ENCODED_SPECIFIER_BOUNDARY_PATTERN}"
     )
     return plain_pattern, encoded_pattern
 
