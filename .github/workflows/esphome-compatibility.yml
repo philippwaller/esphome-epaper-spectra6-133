@@ -45,8 +45,10 @@ jobs:
     steps:
       - name: Resolve requested mode
         id: mode
+        env:
+          RUN_MODE: ${{ inputs.run_mode }}
         run: |
-          mode="${{ inputs.run_mode }}"
+          mode="${RUN_MODE}"
 
           case "${mode}" in
             full|default)
