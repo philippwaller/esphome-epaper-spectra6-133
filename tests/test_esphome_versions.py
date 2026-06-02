@@ -1,4 +1,8 @@
-"""Tests for scripts/esphome-versions.py."""
+"""Regression tests for the ESPHome version helper CLI.
+
+The module is imported by path because the script filename contains a hyphen,
+and tests mock PyPI responses so version filtering stays deterministic.
+"""
 
 from __future__ import annotations
 
@@ -31,9 +35,11 @@ class FakeResponse(io.BytesIO):
     """Minimal context-managed response object for mocked urlopen calls."""
 
     def __enter__(self) -> FakeResponse:
+        """Return the in-memory response for use in a with-statement."""
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
+        """Close the in-memory response when the with-statement exits."""
         self.close()
 
 
@@ -41,10 +47,12 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
     """Coverage for the PyPI-backed version helper script."""
 
     def mock_pypi(self, releases: dict[str, list[object]]) -> FakeResponse:
+        """Build a fake PyPI JSON response containing the supplied releases."""
         payload = json.dumps({"releases": releases}).encode("utf-8")
         return FakeResponse(payload)
 
     def test_parse_requirement_preserves_full_specifier_string(self) -> None:
+        """Preserve compound specifiers exactly while formatting display text."""
         with tempfile.TemporaryDirectory() as temp_dir:
             requirements_file = Path(temp_dir) / "requirements.txt"
             requirements_file.write_text(
@@ -63,6 +71,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         self.assertEqual(display, ">= 1.2, < 2, != 1.5")
 
     def test_matching_versions_filters_and_sorts_stable_releases(self) -> None:
+        """Ignore invalid and prerelease versions unless explicitly requested."""
         releases = {
             "2026.2.0": [],
             "2026.1.1": [],
@@ -77,6 +86,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         self.assertEqual(versions, ["2026.1.0", "2026.1.1", "2026.2.0"])
 
     def test_matching_versions_can_include_prereleases(self) -> None:
+        """Allow prerelease matches when the query opts into prereleases."""
         releases = {
             "2026.2.0rc1": [],
             "2026.2.0": [],
@@ -91,6 +101,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         self.assertEqual(versions, ["2026.2.0rc1", "2026.2.0"])
 
     def test_matching_versions_reports_missing_package(self) -> None:
+        """Convert a PyPI 404 into a clear missing-package runtime error."""
         error = HTTPError(
             url="https://pypi.org/pypi/missing/json",
             code=404,
@@ -104,6 +115,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
                 MODULE.matching_versions("missing", ">=1")
 
     def test_validate_versions_default_uses_latest_patch_per_minor(self) -> None:
+        """Keep the validation matrix lean while covering every minor release."""
         versions = MODULE.validate_versions_default(
             [
                 "2026.1.0",
@@ -118,6 +130,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         self.assertEqual(versions, ["2026.1.0", "2026.1.5", "2026.2.3", "2026.3.1"])
 
     def test_versions_for_mode_rejects_empty_full_modes(self) -> None:
+        """Ensure versions_for_mode rejects empty full mode results."""
         with self.assertRaisesRegex(
             ValueError, "No versions resolved for mode validate-full"
         ):
@@ -131,6 +144,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
     def test_apply_managed_specifier_sync_replaces_plain_and_encoded_matches(
         self,
     ) -> None:
+        """Update badges and table rows inside marked managed regions."""
         readme = textwrap.dedent(
             f"""\
             Intro
@@ -173,6 +187,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         self.assertNotIn("2025.9.4", rendered)
 
     def test_apply_managed_specifier_sync_can_replace_old_shape(self) -> None:
+        """Support older managed block layouts that only contain plain text."""
         contributing = textwrap.dedent(
             f"""\
             Intro
@@ -207,6 +222,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
     def test_apply_managed_specifier_sync_replaces_arbitrary_equality_literals(
         self,
     ) -> None:
+        """Replace arbitrary equality literals without overmatching badge suffixes."""
         readme = textwrap.dedent(
             f"""\
             Intro
@@ -244,6 +260,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         self.assertNotIn("foo-bar", rendered)
 
     def test_replace_marked_block_requires_balanced_markers(self) -> None:
+        """Reject managed blocks that are missing their closing marker."""
         with self.assertRaisesRegex(ValueError, "missing"):
             MODULE.replace_marked_block(
                 f"{MODULE.VERSION_SPECIFIER_BLOCK_START}\n| **ESPHome** | >= 2025.9.4 |\n",
@@ -251,6 +268,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
             )
 
     def test_replace_marked_line_requires_following_line(self) -> None:
+        """Reject a single-line marker that has no managed line to replace."""
         with self.assertRaisesRegex(ValueError, "must be followed"):
             MODULE.replace_marked_line(
                 MODULE.VERSION_SPECIFIER_LINE_MARKER,
@@ -258,6 +276,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
             )
 
     def test_apply_managed_specifier_sync_requires_replaceable_content(self) -> None:
+        """Require managed regions to contain a recognizable specifier."""
         content = textwrap.dedent(
             f"""\
             Intro
@@ -286,6 +305,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
             )
 
     def test_resolve_query_uses_requirement_default(self) -> None:
+        """Read the default package and specifier from a requirements file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             requirements_file = Path(temp_dir) / "requirements.txt"
             requirements_file.write_text(
@@ -309,6 +329,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         self.assertEqual(query.specifier_display, ">= 2026.1.0, < 2026.3.0")
 
     def test_emit_matrix_uses_resolved_versions(self) -> None:
+        """Build compile matrices from resolved versions and smoke-test configs."""
         args = argparse.Namespace(
             package=None,
             specifier=">=2026.1.0,<2026.3.0",
@@ -337,6 +358,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         )
 
     def test_validate_matrix_only_includes_esphome_versions(self) -> None:
+        """Ensure validate matrices contain only ESPHome versions."""
         matrix = json.loads(MODULE.matrix_for_versions(["2026.1.0", "2026.2.1"]))
 
         self.assertEqual(
@@ -345,6 +367,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         )
 
     def test_compile_matrix_includes_each_smoke_test_config(self) -> None:
+        """Ensure compile matrices include every smoke test config."""
         matrix = json.loads(
             MODULE.compile_matrix_for_versions(["2026.1.0", "2026.2.1"])
         )
@@ -364,6 +387,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         )
 
     def test_cli_resolve_uses_default_requirement(self) -> None:
+        """Exercise the resolve subcommand with the default requirement lookup."""
         with tempfile.TemporaryDirectory() as temp_dir:
             requirements_file = Path(temp_dir) / "requirements.txt"
             requirements_file.write_text(

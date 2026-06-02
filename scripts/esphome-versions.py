@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Resolve package versions from PyPI and keep ESPHome support docs in sync."""
+"""Resolve ESPHome package versions and keep support documentation in sync.
+
+The script powers CI matrix generation from PyPI releases and updates managed
+README/CONTRIBUTING snippets from the effective requirements.txt specifier.
+"""
 
 from __future__ import annotations
 
@@ -59,7 +63,7 @@ ENCODED_SPECIFIER_BOUNDARY_PATTERN = (
 
 @dataclass(frozen=True)
 class VersionQuery:
-    """Resolved package/version query used by the CLI commands."""
+    """Effective package query shared by version, matrix, and sync commands."""
 
     package_name: str
     specifier: str
@@ -68,7 +72,7 @@ class VersionQuery:
 
 
 def normalize_specifier_display(specifier: str) -> str:
-    """Render a version specifier string with readable spacing."""
+    """Render a PEP 440 specifier string with readable operator spacing."""
     formatted_parts: list[str] = []
     for part in specifier.split(","):
         stripped = part.strip()
@@ -88,12 +92,12 @@ def normalize_specifier_display(specifier: str) -> str:
 
 
 def sort_versions(versions: list[str]) -> list[str]:
-    """Sort versions from oldest to newest."""
+    """Sort PEP 440 version strings from oldest to newest."""
     return sorted(versions, key=Version)
 
 
 def unique_sorted_versions(versions: list[str]) -> list[str]:
-    """Deduplicate and sort versions deterministically."""
+    """Normalize, deduplicate, and sort PEP 440 version strings."""
     return sorted({str(Version(version)) for version in versions}, key=Version)
 
 
@@ -101,7 +105,7 @@ def parse_requirement(
     package_name: str,
     path: Path = REQUIREMENTS_FILE,
 ) -> tuple[str, str]:
-    """Read one package requirement from a requirements.txt style file."""
+    """Read one constrained package requirement from a requirements-style file."""
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         stripped = raw_line.strip()
         if not stripped or stripped.startswith("#"):
@@ -133,7 +137,7 @@ def resolve_query(
     include_prereleases: bool,
     requirements_file: Path,
 ) -> VersionQuery:
-    """Resolve the effective package name and version specifier for a command."""
+    """Resolve CLI package/specifier input, falling back to requirements.txt."""
     effective_package_name = package_name or DEFAULT_PACKAGE_NAME
     if specifier is None:
         specifier, specifier_display = parse_requirement(
@@ -160,7 +164,7 @@ def fetch_package_versions(
     *,
     include_prereleases: bool,
 ) -> list[Version]:
-    """Return valid PyPI release versions for one package."""
+    """Fetch valid PyPI release versions for one package, optionally prereleases."""
     request = Request(
         PYPI_JSON_URL.format(package_name=quote(package_name, safe="")),
         headers={"Accept": "application/json", "User-Agent": DEFAULT_USER_AGENT},
@@ -200,7 +204,7 @@ def matching_versions(
     specifier: str,
     include_prereleases: bool = False,
 ) -> list[str]:
-    """Return all PyPI releases that satisfy one package specifier."""
+    """Return sorted PyPI releases that satisfy one package specifier."""
     spec = SpecifierSet(specifier)
     versions: list[Version] = []
     for version in fetch_package_versions(
@@ -214,7 +218,7 @@ def matching_versions(
 
 
 def extract_specifier_versions(specifier: str) -> list[str]:
-    """Extract version literals from one requirement specifier string."""
+    """Extract version literals from comma-separated specifier clauses."""
     versions: list[str] = []
     for part in specifier.split(","):
         stripped = part.strip()
@@ -242,7 +246,7 @@ def extract_specifier_versions(specifier: str) -> list[str]:
 
 
 def pattern_version_sort_key(version: str) -> tuple[int, Version | str, str]:
-    """Sort valid versions before opaque specifier literals such as wildcards."""
+    """Place valid versions before opaque specifier literals such as wildcards."""
     try:
         return (0, Version(version), version)
     except InvalidVersion:
@@ -250,7 +254,7 @@ def pattern_version_sort_key(version: str) -> tuple[int, Version | str, str]:
 
 
 def sort_pattern_versions(versions: list[str]) -> list[str]:
-    """Sort version literals for deterministic and safe regex alternation."""
+    """Sort version literals longest-first for deterministic regex alternation."""
     unique_versions = sorted({*versions}, key=pattern_version_sort_key)
     return sorted(
         unique_versions,
@@ -262,7 +266,7 @@ def build_specifier_patterns(
     package_name: str,
     current_specifier: str,
 ) -> tuple[re.Pattern[str], re.Pattern[str]]:
-    """Build plain-text and URL-encoded specifier patterns for managed docs."""
+    """Build plain-text and URL-encoded specifier regexes for managed docs."""
     operator_alternation = "|".join(
         re.escape(operator) for operator in SPECIFIER_OPERATORS
     )
@@ -286,7 +290,7 @@ def build_specifier_patterns(
 
 
 def validate_versions_default(versions: list[str]) -> list[str]:
-    """Select the lean validation matrix."""
+    """Select first, latest per minor, and latest versions for validation."""
     if not versions:
         raise ValueError("No matching versions were resolved")
 
@@ -302,12 +306,12 @@ def validate_versions_default(versions: list[str]) -> list[str]:
 
 
 def validate_versions_full(versions: list[str]) -> list[str]:
-    """Select the exhaustive validation matrix."""
+    """Select every resolved version for exhaustive validation."""
     return unique_sorted_versions(versions)
 
 
 def compile_versions_default(versions: list[str]) -> list[str]:
-    """Select the default compile smoke-test versions."""
+    """Select oldest and newest versions for default compile smoke tests."""
     if not versions:
         raise ValueError("No matching versions were resolved")
 
@@ -316,12 +320,12 @@ def compile_versions_default(versions: list[str]) -> list[str]:
 
 
 def compile_versions_full(versions: list[str]) -> list[str]:
-    """Select the exhaustive compile matrix."""
+    """Select every resolved version for exhaustive compile smoke tests."""
     return unique_sorted_versions(versions)
 
 
 def versions_for_mode(versions: list[str], mode: str) -> list[str]:
-    """Resolve a matrix mode to a list of versions."""
+    """Resolve a named matrix mode to the versions it should exercise."""
     if mode in {"validate", "validate-default"}:
         return validate_versions_default(versions)
     if mode == "validate-full":
@@ -340,12 +344,12 @@ def versions_for_mode(versions: list[str], mode: str) -> list[str]:
 
 
 def is_compile_mode(mode: str) -> bool:
-    """Return whether one matrix mode runs compile smoke tests."""
+    """Return whether a matrix mode runs compile smoke tests."""
     return mode in {"compile", "compile-default", "compile-full"}
 
 
 def matrix_for_versions(versions: list[str]) -> str:
-    """Return compact GitHub Actions matrix JSON."""
+    """Return compact GitHub Actions matrix JSON for validation jobs."""
     matrix = {"include": [{"esphome": version} for version in versions]}
     return json.dumps(matrix, separators=(",", ":"))
 
@@ -363,7 +367,7 @@ def compile_matrix_for_versions(versions: list[str]) -> str:
 
 
 def replace_marked_block(content: str, transform: Callable[[str], str]) -> str:
-    """Transform the contents of each managed block in place."""
+    """Transform each managed block while preserving its marker comments."""
     parts = content.split(VERSION_SPECIFIER_BLOCK_START)
     if len(parts) == 1:
         raise ValueError(
@@ -398,7 +402,7 @@ def replace_marked_block(content: str, transform: Callable[[str], str]) -> str:
 
 
 def replace_marked_line(content: str, transform: Callable[[str], str]) -> str:
-    """Transform the line following each single-line marker."""
+    """Transform the line following each single-line managed marker."""
     lines = content.splitlines(keepends=True)
     updated_lines: list[str] = []
     found_marker = False
@@ -440,7 +444,7 @@ def replace_specifier_in_managed_content(
     encoded_pattern: re.Pattern[str],
     specifier_display: str,
 ) -> str:
-    """Replace matched specifier strings inside one managed region."""
+    """Replace plain or URL-encoded specifier strings inside one managed region."""
     updated_content = managed_content
     replacement_count = 0
     encoded_specifier = quote(specifier_display, safe="")
@@ -472,7 +476,7 @@ def apply_managed_specifier_sync(
     encoded_pattern: re.Pattern[str],
     specifier_display: str,
 ) -> str:
-    """Apply generic specifier replacement to all managed regions in one file."""
+    """Apply specifier replacement to every managed line or block in one file."""
     has_line_marker = VERSION_SPECIFIER_LINE_MARKER in content
     has_block_marker = (
         VERSION_SPECIFIER_BLOCK_START in content
@@ -482,6 +486,7 @@ def apply_managed_specifier_sync(
         raise ValueError("No managed version-specifier markers found")
 
     def transform(managed_content: str) -> str:
+        """Replace the specifier within one managed region."""
         return replace_specifier_in_managed_content(
             managed_content,
             plain_pattern=plain_pattern,
@@ -498,7 +503,7 @@ def apply_managed_specifier_sync(
 
 
 def update_file(path: Path, rendered: str, *, check: bool) -> bool:
-    """Write rendered content unless the file already matches."""
+    """Write rendered content, or report drift without writing in check mode."""
     current = path.read_text(encoding="utf-8")
     if current == rendered:
         return False
@@ -509,7 +514,7 @@ def update_file(path: Path, rendered: str, *, check: bool) -> bool:
 
 
 def add_query_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add shared version-query arguments to a subcommand parser."""
+    """Add package/specifier options shared by version-resolving subcommands."""
     parser.add_argument(
         "--package",
         default=None,
@@ -541,7 +546,7 @@ def add_query_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def emit_resolved_versions(args: argparse.Namespace) -> None:
-    """Resolve and print all matching package versions."""
+    """Resolve and print all matching package versions, one per line."""
     query = resolve_query(
         package_name=args.package,
         specifier=args.specifier,
@@ -560,7 +565,7 @@ def emit_resolved_versions(args: argparse.Namespace) -> None:
 
 
 def emit_matrix(args: argparse.Namespace) -> None:
-    """Emit one GitHub Actions matrix."""
+    """Resolve versions and emit the requested GitHub Actions matrix."""
     query = resolve_query(
         package_name=args.package,
         specifier=args.specifier,
@@ -581,12 +586,12 @@ def emit_matrix(args: argparse.Namespace) -> None:
 
 
 def emit_compile_configs(_: argparse.Namespace) -> None:
-    """Emit the representative compile smoke-test configs, one per line."""
+    """Emit representative compile smoke-test configs, one per line."""
     print("\n".join(COMPILE_SMOKE_TEST_CONFIGS))
 
 
 def sync_support_files(args: argparse.Namespace) -> None:
-    """Synchronize derived support docs with the effective package specifier."""
+    """Synchronize README and CONTRIBUTING managed snippets with the specifier."""
     query = resolve_query(
         package_name=args.package,
         specifier=args.specifier,
@@ -616,7 +621,7 @@ def sync_support_files(args: argparse.Namespace) -> None:
         changed = ", ".join(str(path.relative_to(ROOT_DIR)) for path in changed_paths)
         raise ValueError(
             "Support-derived files are out of date. Run "
-            "./.venv/bin/python scripts/esphome-versions.py sync. "
+            "python scripts/esphome-versions.py sync. "
             f"Changed: {changed}"
         )
 
@@ -633,7 +638,7 @@ def sync_support_files(args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line interface."""
+    """Build the command-line parser and attach subcommand handlers."""
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -699,6 +704,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Run the CLI and render expected failures as user-facing errors."""
     parser = build_parser()
     args = parser.parse_args()
     try:
