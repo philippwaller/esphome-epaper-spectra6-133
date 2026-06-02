@@ -208,10 +208,15 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
             """
         )
 
-        plain_pattern, encoded_pattern = MODULE.build_specifier_patterns(
-            "esphome",
-            "===foo-baz/rc[2]@local:tag",
-        )
+        with patch.object(
+            MODULE,
+            "fetch_package_versions",
+            side_effect=AssertionError("unexpected PyPI fetch"),
+        ):
+            plain_pattern, encoded_pattern = MODULE.build_specifier_patterns(
+                "esphome",
+                "===foo-baz/rc[2]@local:tag",
+            )
 
         rendered = MODULE.apply_managed_specifier_sync(
             readme,
