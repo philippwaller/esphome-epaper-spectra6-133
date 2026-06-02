@@ -36,6 +36,7 @@ jobs:
           filters: |
             ci:
               - '.github/workflows/**/*.{yml,yaml}'
+              - '.github/actions/**/*.{yml,yaml}'
             python:
               - 'components/epaper_spectra6_133/**/*.py'
             cpp:

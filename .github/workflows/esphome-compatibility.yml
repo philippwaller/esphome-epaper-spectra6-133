@@ -72,6 +72,11 @@ jobs:
       - uses: ./.github/actions/setup-python-env
       - name: Install script dependencies
         run: pip install --disable-pip-version-check "packaging>=24"
+      - name: Resolve artifact name
+        id: artifact
+        run: |
+          safe_ref="${GITHUB_REF_NAME//\//-}"
+          echo "name=latest-esphome-version-${safe_ref}" >> "$GITHUB_OUTPUT"
       - name: Resolve latest ESPHome version
         id: current
         run: |
@@ -86,16 +91,17 @@ jobs:
         id: previous
         env:
           GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: ${{ steps.artifact.outputs.name }}
         run: |
           mkdir -p previous-artifact
           artifact_url="$(
-            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=latest-esphome-version&per_page=20" \
+            gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/artifacts" -f "name=${ARTIFACT_NAME}" -f per_page=20 \
               --jq '.artifacts[] | select(.expired == false) | .archive_download_url' \
               | head -n 1
           )"
 
           if [[ -z "${artifact_url}" ]]; then
-            echo "No previous latest-esphome-version artifact found."
+            echo "No previous ${ARTIFACT_NAME} artifact found."
             echo "previous_version=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -137,7 +143,7 @@ jobs:
         if: always() && steps.current.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: latest-esphome-version
+          name: ${{ steps.artifact.outputs.name }}
           path: artifacts/latest-version.json
           if-no-files-found: error
 
