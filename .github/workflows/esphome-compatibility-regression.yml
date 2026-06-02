@@ -1,0 +1,90 @@
+name: ESPHome Full Matrix
+on:
+  schedule:
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  esphome-matrix:
+    name: ESPHome Full Version Matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      validate: ${{ steps.matrix.outputs.validate }}
+      compile: ${{ steps.matrix.outputs.compile }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install script dependencies
+        run: pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: Generate full ESPHome version matrices
+        id: matrix
+        run: |
+          echo "validate=$(python scripts/esphome-versions.py matrix --mode validate-full)" >> "$GITHUB_OUTPUT"
+          echo "compile=$(python scripts/esphome-versions.py matrix --mode compile-full)" >> "$GITHUB_OUTPUT"
+
+  esphome-validate:
+    name: ESPHome Config Validation Full (${{ matrix.esphome }})
+    needs: esphome-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.esphome-matrix.outputs.validate) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Set up local developer environment
+        env:
+          ESPHOME_VERSION: ${{ matrix.esphome }}
+        run: bash ./scripts/setup.sh
+      - name: Validate all standalone configs
+        run: bash ./scripts/validate-configs.sh
+
+  esphome-compile:
+    name: ESPHome Compile Full (${{ matrix.esphome }})
+    needs: esphome-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.esphome-matrix.outputs.compile) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Restore ESPHome compile caches
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/esphome
+          key: esphome-full-compile-${{ runner.os }}-${{ matrix.esphome }}-${{ hashFiles('configs/**/*.yaml', 'packages/**/*.yaml', 'partitions/**/*', 'components/epaper_spectra6_133/**/*', 'requirements.txt', 'requirements-dev.txt', 'scripts/esphome-versions.py', 'scripts/compile-configs.sh') }}
+          restore-keys: |
+            esphome-full-compile-${{ runner.os }}-${{ matrix.esphome }}-
+      - name: Set up local developer environment
+        env:
+          ESPHOME_VERSION: ${{ matrix.esphome }}
+        run: bash ./scripts/setup.sh
+      - name: Compile representative ESPHome configs
+        run: bash ./scripts/compile-configs.sh

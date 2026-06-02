@@ -61,7 +61,17 @@ prepare_python_environment() {
   fi
 
   "${VENV_PYTHON}" -m pip install --upgrade pip
-  "${VENV_PYTHON}" -m pip install -r "${REQUIREMENTS_DEV}"
+
+  if [[ -n "${ESPHOME_VERSION:-}" ]]; then
+    if [[ ! "${ESPHOME_VERSION}" =~ ^[0-9]{4}\.[0-9]+\.[0-9]+(a[0-9]+|b[0-9]+|rc[0-9]+)?$ ]]; then
+      echo "ESPHOME_VERSION must be an exact version such as 2026.5.1, 2026.5.0b3, or 2026.5.0rc1." >&2
+      return 1
+    fi
+
+    "${VENV_PYTHON}" -m pip install -r "${REQUIREMENTS_DEV}" "esphome==${ESPHOME_VERSION}"
+  else
+    "${VENV_PYTHON}" -m pip install -r "${REQUIREMENTS_DEV}"
+  fi
 }
 
 cd "${ROOT_DIR}"
