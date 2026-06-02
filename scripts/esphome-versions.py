@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -338,7 +339,7 @@ def matrix_for_versions(versions: list[str]) -> str:
     return json.dumps(matrix, separators=(",", ":"))
 
 
-def replace_marked_block(content: str, transform: callable) -> str:
+def replace_marked_block(content: str, transform: Callable[[str], str]) -> str:
     """Transform the contents of each managed block in place."""
     parts = content.split(VERSION_SPECIFIER_BLOCK_START)
     if len(parts) == 1:
@@ -373,7 +374,7 @@ def replace_marked_block(content: str, transform: callable) -> str:
     return "".join(rebuilt)
 
 
-def replace_marked_line(content: str, transform: callable) -> str:
+def replace_marked_line(content: str, transform: Callable[[str], str]) -> str:
     """Transform the line following each single-line marker."""
     lines = content.splitlines(keepends=True)
     updated_lines: list[str] = []
