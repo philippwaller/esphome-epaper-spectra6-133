@@ -82,8 +82,10 @@ jobs:
       - name: Generate ESPHome version matrices
         id: matrix
         run: |
-          echo "validate=$(python scripts/esphome-versions.py matrix --mode validate-default)" >> "$GITHUB_OUTPUT"
-          echo "compile=$(python scripts/esphome-versions.py matrix --mode compile-default)" >> "$GITHUB_OUTPUT"
+          validate="$(python scripts/esphome-versions.py matrix --mode validate-default)"
+          compile="$(python scripts/esphome-versions.py matrix --mode compile-default)"
+          echo "validate=$validate" >> "$GITHUB_OUTPUT"
+          echo "compile=$compile" >> "$GITHUB_OUTPUT"
 
   lint:
     name: Lint and Format Checks

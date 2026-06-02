@@ -29,8 +29,10 @@ jobs:
       - name: Generate full ESPHome version matrices
         id: matrix
         run: |
-          echo "validate=$(python scripts/esphome-versions.py matrix --mode validate-full)" >> "$GITHUB_OUTPUT"
-          echo "compile=$(python scripts/esphome-versions.py matrix --mode compile-full)" >> "$GITHUB_OUTPUT"
+          validate_result="$(python scripts/esphome-versions.py matrix --mode validate-full)"
+          compile_result="$(python scripts/esphome-versions.py matrix --mode compile-full)"
+          echo "validate=$validate_result" >> "$GITHUB_OUTPUT"
+          echo "compile=$compile_result" >> "$GITHUB_OUTPUT"
 
   esphome-validate:
     name: ESPHome Config Validation Full (${{ matrix.esphome }})
