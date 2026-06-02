@@ -70,7 +70,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       mode: ${{ steps.matrix.outputs.mode }}
-      run_label: ${{ steps.matrix.outputs.run_label }}
       validate: ${{ steps.matrix.outputs.validate }}
       compile: ${{ steps.matrix.outputs.compile }}
     steps:
@@ -93,12 +92,10 @@ jobs:
             all-supported-versions)
               validate_mode="validate-all-supported-versions"
               compile_mode="compile-all-supported-versions"
-              run_label="All Supported Versions"
               ;;
             compatibility-window)
               validate_mode="validate-compatibility-window"
               compile_mode="compile-compatibility-window"
-              run_label="Compatibility Window"
               ;;
             *)
               echo "Unsupported compatibility mode: ${RUN_MODE}" >&2
@@ -111,13 +108,12 @@ jobs:
 
           {
             echo "mode=${RUN_MODE}"
-            echo "run_label=${run_label}"
             echo "validate=${validate_result}"
             echo "compile=${compile_result}"
           } >> "$GITHUB_OUTPUT"
 
   esphome-validate:
-    name: ESPHome Config Validation ${{ needs.esphome-matrix.outputs.run_label }} (${{ matrix.esphome }})
+    name: ESPHome Config Validation (${{ matrix.esphome }})
     needs: esphome-matrix
     if: needs.esphome-matrix.result == 'success'
     runs-on: ubuntu-latest
@@ -134,7 +130,7 @@ jobs:
         run: bash ./scripts/validate-configs.sh
 
   esphome-compile:
-    name: ESPHome Compile ${{ needs.esphome-matrix.outputs.run_label }} (${{ matrix.esphome }}, ${{ matrix.config }})
+    name: ESPHome Compile (${{ matrix.esphome }}, ${{ matrix.config }})
     needs: esphome-matrix
     if: needs.esphome-matrix.result == 'success'
     runs-on: ubuntu-latest
