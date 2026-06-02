@@ -33,6 +33,7 @@ if [[ $# -gt 0 ]]; then
 else
   resolved_configs="$("${PYTHON_BIN}" "${ROOT_DIR}/scripts/esphome-versions.py" compile-configs)"
   while IFS= read -r config; do
+    [[ -n "${config}" ]] || continue
     configs+=("${config}")
   done <<< "${resolved_configs}"
 fi
