@@ -217,6 +217,14 @@ def matching_versions(
     return [str(version) for version in sorted(set(versions))]
 
 
+def latest_version(versions: list[str]) -> str:
+    """Return the newest version from a non-empty list of PEP 440 versions."""
+    if not versions:
+        raise ValueError("No matching versions were resolved")
+
+    return sort_versions(versions)[-1]
+
+
 def extract_specifier_versions(specifier: str) -> list[str]:
     """Extract version literals from comma-separated specifier clauses."""
     versions: list[str] = []
@@ -585,6 +593,40 @@ def emit_matrix(args: argparse.Namespace) -> None:
     print(matrix_for_versions(matrix_versions))
 
 
+def emit_latest_version(args: argparse.Namespace) -> None:
+    """Resolve and print the latest matching package version."""
+    query = resolve_query(
+        package_name=args.package,
+        specifier=args.specifier,
+        include_prereleases=args.include_prereleases,
+        requirements_file=args.requirements_file,
+    )
+    version = latest_version(
+        matching_versions(
+            query.package_name,
+            query.specifier,
+            include_prereleases=query.include_prereleases,
+        )
+    )
+
+    if args.format == "json":
+        print(
+            json.dumps(
+                {
+                    "package": query.package_name,
+                    "specifier": query.specifier,
+                    "specifier_display": query.specifier_display,
+                    "include_prereleases": query.include_prereleases,
+                    "version": version,
+                },
+                sort_keys=True,
+            )
+        )
+        return
+
+    print(version)
+
+
 def emit_compile_configs(_: argparse.Namespace) -> None:
     """Emit representative compile smoke-test configs, one per line."""
     print("\n".join(COMPILE_SMOKE_TEST_CONFIGS))
@@ -662,6 +704,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Matrix selection strategy.",
     )
     matrix_parser.set_defaults(func=emit_matrix)
+
+    latest_parser = subparsers.add_parser(
+        "latest",
+        help="Emit the latest matching package version from PyPI.",
+    )
+    add_query_arguments(latest_parser)
+    latest_parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Output format for the latest version metadata.",
+    )
+    latest_parser.set_defaults(func=emit_latest_version)
 
     compile_configs_parser = subparsers.add_parser(
         "compile-configs",

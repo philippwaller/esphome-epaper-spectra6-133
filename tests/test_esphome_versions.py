@@ -114,6 +114,18 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not found on PyPI"):
                 MODULE.matching_versions("missing", ">=1")
 
+    def test_latest_version_selects_highest_stable_release(self) -> None:
+        """Pick the newest version from already-filtered stable releases."""
+        version = MODULE.latest_version(["2026.1.0", "2026.2.0", "2026.1.4"])
+
+        self.assertEqual(version, "2026.2.0")
+
+    def test_latest_version_can_select_prerelease(self) -> None:
+        """Allow prereleases when the resolved version list includes them."""
+        version = MODULE.latest_version(["2026.2.0", "2026.3.0rc1"])
+
+        self.assertEqual(version, "2026.3.0rc1")
+
     def test_validate_versions_default_uses_latest_patch_per_minor(self) -> None:
         """Keep the validation matrix lean while covering every minor release."""
         versions = MODULE.validate_versions_default(
@@ -357,6 +369,34 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
             },
         )
 
+    def test_emit_latest_outputs_json_metadata(self) -> None:
+        """Emit JSON metadata for the latest resolved ESPHome version."""
+        args = argparse.Namespace(
+            package=None,
+            specifier=">=2026.1.0,<2026.3.0",
+            include_prereleases=True,
+            requirements_file=ROOT_DIR / "requirements.txt",
+            format="json",
+        )
+        with patch.object(
+            MODULE,
+            "matching_versions",
+            return_value=["2026.1.0", "2026.2.1", "2026.3.0rc1"],
+        ):
+            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                MODULE.emit_latest_version(args)
+
+        self.assertEqual(
+            json.loads(stdout.getvalue()),
+            {
+                "package": "esphome",
+                "specifier": ">=2026.1.0,<2026.3.0",
+                "specifier_display": ">= 2026.1.0, < 2026.3.0",
+                "include_prereleases": True,
+                "version": "2026.3.0rc1",
+            },
+        )
+
     def test_validate_matrix_only_includes_esphome_versions(self) -> None:
         """Ensure validate matrices contain only ESPHome versions."""
         matrix = json.loads(MODULE.matrix_for_versions(["2026.1.0", "2026.2.1"]))
@@ -410,6 +450,33 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
                         MODULE.main()
 
         self.assertEqual(stdout.getvalue().strip(), "2026.1.0")
+
+    def test_cli_latest_uses_default_requirement(self) -> None:
+        """Exercise the latest subcommand with the default requirement lookup."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            requirements_file = Path(temp_dir) / "requirements.txt"
+            requirements_file.write_text(
+                "esphome>=2026.1.0,<2026.3.0\n",
+                encoding="utf-8",
+            )
+
+            with patch.object(
+                MODULE, "matching_versions", return_value=["2026.1.0", "2026.2.1"]
+            ):
+                with patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "esphome-versions.py",
+                        "latest",
+                        "--requirements-file",
+                        str(requirements_file),
+                    ],
+                ):
+                    with patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                        MODULE.main()
+
+        self.assertEqual(stdout.getvalue().strip(), "2026.2.1")
 
 
 if __name__ == "__main__":
