@@ -43,6 +43,8 @@ VERSION_SPECIFIER_BLOCK_START = "<!-- x-esphome-version-specifier-start -->"
 VERSION_SPECIFIER_BLOCK_END = "<!-- x-esphome-version-specifier-end -->"
 VERSION_SPECIFIER_LINE_MARKER = "<!-- x-esphome-version-specifier -->"
 SPECIFIER_OPERATORS = ("===", ">=", "<=", "~=", "!=", "==", ">", "<")
+PLAIN_SPECIFIER_VERSION_PATTERN = r"[A-Za-z0-9][A-Za-z0-9._!*+~]*"
+ENCODED_SPECIFIER_VERSION_PATTERN = r"(?:[A-Za-z0-9._~]|%(?:21|2A|2a|2B|2b))+"
 
 
 @dataclass(frozen=True)
@@ -251,22 +253,6 @@ def build_specifier_patterns(
     current_specifier: str,
 ) -> tuple[re.Pattern[str], re.Pattern[str]]:
     """Build plain-text and URL-encoded specifier patterns for managed docs."""
-    versions = [
-        *[
-            str(version)
-            for version in fetch_package_versions(
-                package_name, include_prereleases=True
-            )
-        ],
-        *extract_specifier_versions(current_specifier),
-    ]
-    version_alternation = "|".join(
-        re.escape(version) for version in sort_pattern_versions(versions)
-    )
-    encoded_version_alternation = "|".join(
-        re.escape(quote(version, safe=""))
-        for version in sort_pattern_versions(versions)
-    )
     operator_alternation = "|".join(
         re.escape(operator) for operator in SPECIFIER_OPERATORS
     )
@@ -275,13 +261,15 @@ def build_specifier_patterns(
     )
 
     plain_pattern = re.compile(
-        rf"(?:{operator_alternation})\s*(?:{version_alternation})"
-        rf"(?:\s*,\s*(?:{operator_alternation})\s*(?:{version_alternation}))*"
+        rf"(?:{operator_alternation})\s*(?:{PLAIN_SPECIFIER_VERSION_PATTERN})"
+        rf"(?:\s*,\s*(?:{operator_alternation})"
+        rf"\s*(?:{PLAIN_SPECIFIER_VERSION_PATTERN}))*"
     )
     encoded_pattern = re.compile(
-        rf"(?:{encoded_operator_alternation})(?:%20)*(?:{encoded_version_alternation})"
+        rf"(?:{encoded_operator_alternation})(?:%20)*"
+        rf"(?:{ENCODED_SPECIFIER_VERSION_PATTERN})"
         rf"(?:(?:%20)*%2C(?:%20)*(?:{encoded_operator_alternation})"
-        rf"(?:%20)*(?:{encoded_version_alternation}))*"
+        rf"(?:%20)*(?:{ENCODED_SPECIFIER_VERSION_PATTERN}))*"
     )
     return plain_pattern, encoded_pattern
 

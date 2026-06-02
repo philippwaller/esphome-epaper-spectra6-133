@@ -138,7 +138,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         with patch.object(
             MODULE,
             "fetch_package_versions",
-            return_value=[MODULE.Version("2025.9.4"), MODULE.Version("2026.1.0")],
+            side_effect=AssertionError("unexpected PyPI fetch"),
         ):
             plain_pattern, encoded_pattern = MODULE.build_specifier_patterns(
                 "esphome",
@@ -175,11 +175,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         with patch.object(
             MODULE,
             "fetch_package_versions",
-            return_value=[
-                MODULE.Version("2025.9.4"),
-                MODULE.Version("2026.1.0"),
-                MODULE.Version("2026.0.0"),
-            ],
+            side_effect=AssertionError("unexpected PyPI fetch"),
         ):
             plain_pattern, encoded_pattern = MODULE.build_specifier_patterns(
                 "esphome",
@@ -224,7 +220,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         with patch.object(
             MODULE,
             "fetch_package_versions",
-            return_value=[MODULE.Version("2026.1.0")],
+            side_effect=AssertionError("unexpected PyPI fetch"),
         ):
             plain_pattern, encoded_pattern = MODULE.build_specifier_patterns(
                 "esphome",
