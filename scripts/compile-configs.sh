@@ -44,5 +44,5 @@ fi
 
 for config in "${configs[@]}"; do
   echo "==> Compiling ${config}"
-  ./scripts/esphomew compile "$config"
+  "${ESPHOMEW_BIN}" compile "$config"
 done

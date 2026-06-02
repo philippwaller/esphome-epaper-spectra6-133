@@ -5,7 +5,7 @@
 ### 13.3″ Spectra 6 E-Paper Display for ESPHome
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-<!-- Don't update the ESPHome support snippets manually. Update requirements.txt and run scripts/esphome-versions.py sync. -->
+<!-- Don't update the ESPHome support snippets manually. Update requirements.txt and run ./.venv/bin/python scripts/esphome-versions.py sync. -->
 <!-- x-esphome-version-specifier -->
 [![ESPHome](https://img.shields.io/badge/ESPHome-%3E%3D%202026.2.0-000000?logo=esphome&logoColor=white)](https://esphome.io)
 [![GitHub Release](https://img.shields.io/github/v/release/philippwaller/esphome-epaper-spectra6-133?logo=github)](https://github.com/philippwaller/esphome-epaper-spectra6-133/releases)
@@ -34,7 +34,7 @@ A ESPHome display component for large-format 13.3″ Spectra 6 e-paper panels. I
 
 ## 📋 Requirements
 
-<!-- Don't update the ESPHome requirements block manually. Update requirements.txt and run scripts/esphome-versions.py sync. -->
+<!-- Don't update the ESPHome requirements block manually. Update requirements.txt and run ./.venv/bin/python scripts/esphome-versions.py sync. -->
 <!-- x-esphome-version-specifier-start -->
 | What | Details |
 | ------ | --------- |

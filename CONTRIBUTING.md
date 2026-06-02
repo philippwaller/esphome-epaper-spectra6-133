@@ -6,7 +6,7 @@ Thank you for your interest in contributing! 🙏
 
 ## Prerequisites
 
-<!-- Don't update the ESPHome prerequisites block manually. Update requirements.txt and run scripts/esphome-versions.py sync. -->
+<!-- Don't update the ESPHome prerequisites block manually. Update requirements.txt and run ./.venv/bin/python scripts/esphome-versions.py sync. -->
 <!-- x-esphome-version-specifier-start -->
 | Requirement | Details |
 | --- | --- |
