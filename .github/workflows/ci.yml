@@ -60,6 +60,13 @@ jobs:
 
   esphome-matrix:
     name: ESPHome Version Matrix
+    needs: changes
+    if: >-
+      needs.changes.outputs.run_all == 'true' ||
+      needs.changes.outputs.esphome_configs == 'true' ||
+      needs.changes.outputs.python == 'true' ||
+      needs.changes.outputs.cpp == 'true' ||
+      needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -71,7 +78,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install script dependencies
-        run: pip install --disable-pip-version-check -r requirements-dev.txt
+        run: pip install --disable-pip-version-check "packaging>=24"
       - name: Generate ESPHome version matrices
         id: matrix
         run: |

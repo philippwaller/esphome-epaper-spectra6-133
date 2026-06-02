@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install script dependencies
-        run: pip install --disable-pip-version-check -r requirements-dev.txt
+        run: pip install --disable-pip-version-check "packaging>=24"
       - name: Generate full ESPHome version matrices
         id: matrix
         run: |
