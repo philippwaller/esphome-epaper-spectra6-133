@@ -15,7 +15,7 @@ Thank you for your interest in contributing! 🙏
 | **Shell** | Bash-compatible shell |
 | **Hardware** | ESP32-S3 with PSRAM (for on-device testing) |
 | **Framework** | ESP-IDF — the driver uses the ESP-IDF SPI master API directly |
-| **ESPHome** | >= 2025.11.0 |
+| **ESPHome** | >= 2026.2.0 |
 <!-- x-esphome-version-specifier-end -->
 
 ---
