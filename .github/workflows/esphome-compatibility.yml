@@ -75,8 +75,8 @@ jobs:
       - name: Resolve artifact name
         id: artifact
         run: |
-          safe_ref="${GITHUB_REF_NAME//\//-}"
-          echo "name=latest-esphome-version-${safe_ref}" >> "$GITHUB_OUTPUT"
+          ref_hash="$(echo -n "$GITHUB_REF" | sha256sum | cut -c1-8)"
+          echo "name=latest-esphome-version-${ref_hash}" >> "$GITHUB_OUTPUT"
       - name: Resolve latest ESPHome version
         id: current
         run: |
