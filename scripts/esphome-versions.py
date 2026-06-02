@@ -34,7 +34,9 @@ STANDALONE_CONFIG_EXTENSIONS = frozenset({".yaml", ".yml"})
 EXCLUDED_STANDALONE_CONFIG_NAMES = frozenset(
     {
         "secrets.yaml",
+        "secrets.yml",
         "secrets.example.yaml",
+        "secrets.example.yml",
     }
 )
 
