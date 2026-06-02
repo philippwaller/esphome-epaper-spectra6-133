@@ -333,9 +333,26 @@ def versions_for_mode(versions: list[str], mode: str) -> list[str]:
     raise ValueError(f"Unsupported matrix mode: {mode}")
 
 
+def is_compile_mode(mode: str) -> bool:
+    """Return whether one matrix mode runs compile smoke tests."""
+    return mode in {"compile", "compile-default", "compile-full"}
+
+
 def matrix_for_versions(versions: list[str]) -> str:
     """Return compact GitHub Actions matrix JSON."""
     matrix = {"include": [{"esphome": version} for version in versions]}
+    return json.dumps(matrix, separators=(",", ":"))
+
+
+def compile_matrix_for_versions(versions: list[str]) -> str:
+    """Return compact GitHub Actions matrix JSON for compile smoke tests."""
+    matrix = {
+        "include": [
+            {"esphome": version, "config": config}
+            for version in versions
+            for config in COMPILE_SMOKE_TEST_CONFIGS
+        ]
+    }
     return json.dumps(matrix, separators=(",", ":"))
 
 
@@ -549,7 +566,12 @@ def emit_matrix(args: argparse.Namespace) -> None:
         query.specifier,
         include_prereleases=query.include_prereleases,
     )
-    print(matrix_for_versions(versions_for_mode(versions, args.mode)))
+    matrix_versions = versions_for_mode(versions, args.mode)
+    if is_compile_mode(args.mode):
+        print(compile_matrix_for_versions(matrix_versions))
+        return
+
+    print(matrix_for_versions(matrix_versions))
 
 
 def emit_compile_configs(_: argparse.Namespace) -> None:

@@ -312,8 +312,44 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
                 MODULE.emit_matrix(args)
 
         self.assertEqual(
-            stdout.getvalue().strip(),
-            '{"include":[{"esphome":"2026.1.0"},{"esphome":"2026.2.1"}]}',
+            json.loads(stdout.getvalue()),
+            {
+                "include": [
+                    {"esphome": "2026.1.0", "config": "configs/hello-world.yaml"},
+                    {"esphome": "2026.1.0", "config": "configs/image.yaml"},
+                    {"esphome": "2026.1.0", "config": "configs/test-sheet.yaml"},
+                    {"esphome": "2026.2.1", "config": "configs/hello-world.yaml"},
+                    {"esphome": "2026.2.1", "config": "configs/image.yaml"},
+                    {"esphome": "2026.2.1", "config": "configs/test-sheet.yaml"},
+                ]
+            },
+        )
+
+    def test_validate_matrix_only_includes_esphome_versions(self) -> None:
+        matrix = json.loads(MODULE.matrix_for_versions(["2026.1.0", "2026.2.1"]))
+
+        self.assertEqual(
+            matrix,
+            {"include": [{"esphome": "2026.1.0"}, {"esphome": "2026.2.1"}]},
+        )
+
+    def test_compile_matrix_includes_each_smoke_test_config(self) -> None:
+        matrix = json.loads(
+            MODULE.compile_matrix_for_versions(["2026.1.0", "2026.2.1"])
+        )
+
+        self.assertEqual(
+            matrix,
+            {
+                "include": [
+                    {"esphome": "2026.1.0", "config": "configs/hello-world.yaml"},
+                    {"esphome": "2026.1.0", "config": "configs/image.yaml"},
+                    {"esphome": "2026.1.0", "config": "configs/test-sheet.yaml"},
+                    {"esphome": "2026.2.1", "config": "configs/hello-world.yaml"},
+                    {"esphome": "2026.2.1", "config": "configs/image.yaml"},
+                    {"esphome": "2026.2.1", "config": "configs/test-sheet.yaml"},
+                ]
+            },
         )
 
     def test_cli_resolve_uses_default_requirement(self) -> None:

@@ -59,7 +59,7 @@ jobs:
         run: bash ./scripts/validate-configs.sh
 
   esphome-compile:
-    name: ESPHome Compile Full (${{ matrix.esphome }})
+    name: ESPHome Compile Full (${{ matrix.esphome }}, ${{ matrix.config }})
     needs: esphome-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -81,7 +81,7 @@ jobs:
           path: |
             ~/.platformio
             ~/.cache/esphome
-          key: esphome-full-compile-${{ runner.os }}-${{ matrix.esphome }}-${{ hashFiles('configs/**/*.yaml', 'packages/**/*.yaml', 'partitions/**/*', 'components/epaper_spectra6_133/**/*', 'requirements.txt', 'requirements-dev.txt', 'scripts/esphome-versions.py', 'scripts/compile-configs.sh') }}
+          key: esphome-full-compile-${{ runner.os }}-${{ matrix.esphome }}-${{ matrix.config }}-${{ hashFiles('configs/**/*.yaml', 'packages/**/*.yaml', 'partitions/**/*', 'components/epaper_spectra6_133/**/*', 'requirements.txt', 'requirements-dev.txt', 'scripts/esphome-versions.py', 'scripts/compile-configs.sh') }}
           restore-keys: |
             esphome-full-compile-${{ runner.os }}-${{ matrix.esphome }}-
       - name: Set up local developer environment
@@ -89,4 +89,4 @@ jobs:
           ESPHOME_VERSION: ${{ matrix.esphome }}
         run: bash ./scripts/setup.sh
       - name: Compile representative ESPHome configs
-        run: bash ./scripts/compile-configs.sh
+        run: bash ./scripts/compile-configs.sh "${{ matrix.config }}"
