@@ -3,13 +3,13 @@ name: ESPHome Compatibility
   workflow_dispatch:
     inputs:
       run_mode:
-        description: Regression run mode
+        description: Compatibility run mode
         required: true
-        default: full
+        default: all-supported-versions
         type: choice
         options:
-          - full
-          - default
+          - all-supported-versions
+          - compatibility-window
       include_prereleases:
         description: Include ESPHome pre-releases in the resolved matrix
         required: false
@@ -18,7 +18,7 @@ name: ESPHome Compatibility
   workflow_call:
     inputs:
       run_mode:
-        description: Regression run mode
+        description: Compatibility run mode
         required: true
         type: string
       include_prereleases:
@@ -37,7 +37,7 @@ concurrency:
 
 jobs:
   run-mode:
-    name: Determine Regression Mode
+    name: Determine Compatibility Mode
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -51,16 +51,16 @@ jobs:
           mode="${RUN_MODE}"
 
           case "${mode}" in
-            full|default)
+            all-supported-versions|compatibility-window)
               ;;
             *)
-              echo "Unsupported regression mode: ${mode}" >&2
+              echo "Unsupported compatibility mode: ${mode}" >&2
               exit 1
               ;;
           esac
 
           echo "mode=${mode}" >> "$GITHUB_OUTPUT"
-          echo "Resolved regression mode: ${mode}"
+          echo "Resolved compatibility mode: ${mode}"
 
   esphome-matrix:
     name: ESPHome Version Matrix
@@ -90,18 +90,18 @@ jobs:
           fi
 
           case "${RUN_MODE}" in
-            full)
-              validate_mode="validate-full"
-              compile_mode="compile-full"
-              run_label="Full"
+            all-supported-versions)
+              validate_mode="validate-all-supported-versions"
+              compile_mode="compile-all-supported-versions"
+              run_label="All Supported Versions"
               ;;
-            default)
-              validate_mode="validate-default"
-              compile_mode="compile-default"
-              run_label="Default"
+            compatibility-window)
+              validate_mode="validate-compatibility-window"
+              compile_mode="compile-compatibility-window"
+              run_label="Compatibility Window"
               ;;
             *)
-              echo "Unsupported regression mode: ${RUN_MODE}" >&2
+              echo "Unsupported compatibility mode: ${RUN_MODE}" >&2
               exit 1
               ;;
           esac

@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  full-matrix:
-    name: Run Full Matrix
+  all-supported-versions:
+    name: Run All Supported Versions
     uses: ./.github/workflows/esphome-compatibility.yml
     with:
-      run_mode: full
+      run_mode: all-supported-versions

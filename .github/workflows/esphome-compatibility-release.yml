@@ -106,5 +106,5 @@ jobs:
     if: needs.version-check.outputs.changed == 'true'
     uses: ./.github/workflows/esphome-compatibility.yml
     with:
-      run_mode: default
+      run_mode: compatibility-window
       include_prereleases: true

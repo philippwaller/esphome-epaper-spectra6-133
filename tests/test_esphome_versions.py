@@ -126,9 +126,11 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
 
         self.assertEqual(version, "2026.3.0rc1")
 
-    def test_validate_versions_default_uses_latest_patch_per_minor(self) -> None:
+    def test_validate_versions_compatibility_window_uses_latest_patch_per_minor(
+        self,
+    ) -> None:
         """Keep the validation matrix lean while covering every minor release."""
-        versions = MODULE.validate_versions_default(
+        versions = MODULE.validate_versions_compatibility_window(
             [
                 "2026.1.0",
                 "2026.1.4",
@@ -141,17 +143,39 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
 
         self.assertEqual(versions, ["2026.1.0", "2026.1.5", "2026.2.3", "2026.3.1"])
 
-    def test_versions_for_mode_rejects_empty_full_modes(self) -> None:
-        """Ensure versions_for_mode rejects empty full mode results."""
+    def test_compile_versions_compatibility_window_adds_stable_for_prerelease(
+        self,
+    ) -> None:
+        """Cover minimum, latest stable, and latest prerelease compile versions."""
+        versions = MODULE.compile_versions_compatibility_window(
+            ["2026.1.0", "2026.2.3", "2026.3.0rc1"]
+        )
+
+        self.assertEqual(versions, ["2026.1.0", "2026.2.3", "2026.3.0rc1"])
+
+    def test_compile_versions_compatibility_window_keeps_stable_latest_pair(
+        self,
+    ) -> None:
+        """Avoid adding an extra compile version when the newest release is stable."""
+        versions = MODULE.compile_versions_compatibility_window(
+            ["2026.1.0", "2026.2.0rc1", "2026.2.0"]
+        )
+
+        self.assertEqual(versions, ["2026.1.0", "2026.2.0"])
+
+    def test_versions_for_mode_rejects_empty_all_supported_versions_modes(
+        self,
+    ) -> None:
+        """Ensure versions_for_mode rejects empty all-supported-versions results."""
         with self.assertRaisesRegex(
-            ValueError, "No versions resolved for mode validate-full"
+            ValueError, "No versions resolved for mode validate-all-supported-versions"
         ):
-            MODULE.versions_for_mode([], "validate-full")
+            MODULE.versions_for_mode([], "validate-all-supported-versions")
 
         with self.assertRaisesRegex(
-            ValueError, "No versions resolved for mode compile-full"
+            ValueError, "No versions resolved for mode compile-all-supported-versions"
         ):
-            MODULE.versions_for_mode([], "compile-full")
+            MODULE.versions_for_mode([], "compile-all-supported-versions")
 
     def test_apply_managed_specifier_sync_replaces_plain_and_encoded_matches(
         self,
@@ -347,7 +371,7 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
             specifier=">=2026.1.0,<2026.3.0",
             include_prereleases=False,
             requirements_file=ROOT_DIR / "requirements.txt",
-            mode="compile-default",
+            mode="compile-compatibility-window",
         )
         with patch.object(
             MODULE, "matching_versions", return_value=["2026.1.0", "2026.2.1"]

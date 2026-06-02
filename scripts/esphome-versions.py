@@ -37,11 +37,11 @@ COMPILE_SMOKE_TEST_CONFIGS = [
 
 MATRIX_MODES = (
     "validate",
-    "validate-default",
-    "validate-full",
+    "validate-compatibility-window",
+    "validate-all-supported-versions",
     "compile",
-    "compile-default",
-    "compile-full",
+    "compile-compatibility-window",
+    "compile-all-supported-versions",
 )
 
 VERSION_SPECIFIER_BLOCK_START = "<!-- x-esphome-version-specifier-start -->"
@@ -297,7 +297,7 @@ def build_specifier_patterns(
     return plain_pattern, encoded_pattern
 
 
-def validate_versions_default(versions: list[str]) -> list[str]:
+def validate_versions_compatibility_window(versions: list[str]) -> list[str]:
     """Select first, latest per minor, and latest versions for validation."""
     if not versions:
         raise ValueError("No matching versions were resolved")
@@ -313,38 +313,46 @@ def validate_versions_default(versions: list[str]) -> list[str]:
     )
 
 
-def validate_versions_full(versions: list[str]) -> list[str]:
-    """Select every resolved version for exhaustive validation."""
+def validate_versions_all_supported_versions(versions: list[str]) -> list[str]:
+    """Select every resolved version for validation."""
     return unique_sorted_versions(versions)
 
 
-def compile_versions_default(versions: list[str]) -> list[str]:
-    """Select oldest and newest versions for default compile smoke tests."""
+def compile_versions_compatibility_window(versions: list[str]) -> list[str]:
+    """Select oldest, newest, and latest stable when newest is a prerelease."""
     if not versions:
         raise ValueError("No matching versions were resolved")
 
     resolved = sort_versions(versions)
-    return unique_sorted_versions([resolved[0], resolved[-1]])
+    selected = [resolved[0], resolved[-1]]
+    if Version(resolved[-1]).is_prerelease:
+        stable_versions = [
+            version for version in resolved if not Version(version).is_prerelease
+        ]
+        if stable_versions:
+            selected.append(stable_versions[-1])
+
+    return unique_sorted_versions(selected)
 
 
-def compile_versions_full(versions: list[str]) -> list[str]:
-    """Select every resolved version for exhaustive compile smoke tests."""
+def compile_versions_all_supported_versions(versions: list[str]) -> list[str]:
+    """Select every resolved version for compile smoke tests."""
     return unique_sorted_versions(versions)
 
 
 def versions_for_mode(versions: list[str], mode: str) -> list[str]:
     """Resolve a named matrix mode to the versions it should exercise."""
-    if mode in {"validate", "validate-default"}:
-        return validate_versions_default(versions)
-    if mode == "validate-full":
-        resolved = validate_versions_full(versions)
+    if mode in {"validate", "validate-compatibility-window"}:
+        return validate_versions_compatibility_window(versions)
+    if mode == "validate-all-supported-versions":
+        resolved = validate_versions_all_supported_versions(versions)
         if not resolved:
             raise ValueError(f"No versions resolved for mode {mode}")
         return resolved
-    if mode in {"compile", "compile-default"}:
-        return compile_versions_default(versions)
-    if mode == "compile-full":
-        resolved = compile_versions_full(versions)
+    if mode in {"compile", "compile-compatibility-window"}:
+        return compile_versions_compatibility_window(versions)
+    if mode == "compile-all-supported-versions":
+        resolved = compile_versions_all_supported_versions(versions)
         if not resolved:
             raise ValueError(f"No versions resolved for mode {mode}")
         return resolved
@@ -353,7 +361,11 @@ def versions_for_mode(versions: list[str], mode: str) -> list[str]:
 
 def is_compile_mode(mode: str) -> bool:
     """Return whether a matrix mode runs compile smoke tests."""
-    return mode in {"compile", "compile-default", "compile-full"}
+    return mode in {
+        "compile",
+        "compile-compatibility-window",
+        "compile-all-supported-versions",
+    }
 
 
 def matrix_for_versions(versions: list[str]) -> str:
