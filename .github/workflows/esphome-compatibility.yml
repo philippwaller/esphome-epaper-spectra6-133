@@ -152,5 +152,5 @@ jobs:
       - uses: ./.github/actions/setup-esphome-env
         with:
           esphome-version: ${{ matrix.esphome }}
-      - name: Compile representative ESPHome configs
+      - name: Compile standalone ESPHome configs
         run: bash ./scripts/compile-configs.sh "${{ matrix.config }}"

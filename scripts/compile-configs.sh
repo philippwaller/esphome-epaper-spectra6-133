@@ -32,7 +32,7 @@ if [[ $# -gt 0 ]]; then
   configs=("$@")
 else
   if ! resolved_configs="$("${PYTHON_BIN}" "${ROOT_DIR}/scripts/esphome-versions.py" compile-configs)"; then
-    echo "Failed to resolve compile smoke-test configs." >&2
+    echo "Failed to resolve standalone compile configs." >&2
     exit 1
   fi
   while IFS= read -r config; do
@@ -42,7 +42,7 @@ else
 fi
 
 if [[ ${#configs[@]} -eq 0 ]]; then
-  echo "No compile smoke-test configs were resolved." >&2
+  echo "No standalone compile configs were resolved." >&2
   exit 1
 fi
 

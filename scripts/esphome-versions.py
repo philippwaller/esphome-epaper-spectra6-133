@@ -25,15 +25,18 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 REQUIREMENTS_FILE = ROOT_DIR / "requirements.txt"
 README_FILE = ROOT_DIR / "README.md"
 CONTRIBUTING_FILE = ROOT_DIR / "CONTRIBUTING.md"
+CONFIGS_DIR = ROOT_DIR / "configs"
 DEFAULT_PACKAGE_NAME = "esphome"
 PYPI_JSON_URL = "https://pypi.org/pypi/{package_name}/json"
 DEFAULT_USER_AGENT = "python-package-version-resolver/1.0"
 
-COMPILE_SMOKE_TEST_CONFIGS = [
-    "configs/hello-world.yaml",
-    "configs/image.yaml",
-    "configs/test-sheet.yaml",
-]
+STANDALONE_CONFIG_EXTENSIONS = frozenset({".yaml", ".yml"})
+EXCLUDED_STANDALONE_CONFIG_NAMES = frozenset(
+    {
+        "secrets.yaml",
+        "secrets.example.yaml",
+    }
+)
 
 MATRIX_MODES = (
     "validate",
@@ -99,6 +102,28 @@ def sort_versions(versions: list[str]) -> list[str]:
 def unique_sorted_versions(versions: list[str]) -> list[str]:
     """Normalize, deduplicate, and sort PEP 440 version strings."""
     return sorted({str(Version(version)) for version in versions}, key=Version)
+
+
+def discover_standalone_configs(
+    configs_dir: Path = CONFIGS_DIR,
+    *,
+    root_dir: Path = ROOT_DIR,
+) -> list[str]:
+    """Return standalone ESPHome example configs as sorted repo-relative paths."""
+    if not configs_dir.is_dir():
+        return []
+
+    configs: list[str] = []
+    for path in configs_dir.iterdir():
+        if not path.is_file():
+            continue
+        if path.suffix not in STANDALONE_CONFIG_EXTENSIONS:
+            continue
+        if path.name in EXCLUDED_STANDALONE_CONFIG_NAMES:
+            continue
+        configs.append(path.relative_to(root_dir).as_posix())
+
+    return sorted(configs)
 
 
 def parse_requirement(
@@ -374,13 +399,21 @@ def matrix_for_versions(versions: list[str]) -> str:
     return json.dumps(matrix, separators=(",", ":"))
 
 
-def compile_matrix_for_versions(versions: list[str]) -> str:
+def compile_matrix_for_versions(
+    versions: list[str],
+    configs: list[str] | None = None,
+) -> str:
     """Return compact GitHub Actions matrix JSON for compile smoke tests."""
+    if configs is None:
+        configs = discover_standalone_configs()
+    if not configs:
+        raise ValueError(f"No standalone configs found under {CONFIGS_DIR.name}/")
+
     matrix = {
         "include": [
             {"esphome": version, "config": config}
             for version in versions
-            for config in COMPILE_SMOKE_TEST_CONFIGS
+            for config in configs
         ]
     }
     return json.dumps(matrix, separators=(",", ":"))
@@ -640,8 +673,11 @@ def emit_latest_version(args: argparse.Namespace) -> None:
 
 
 def emit_compile_configs(_: argparse.Namespace) -> None:
-    """Emit representative compile smoke-test configs, one per line."""
-    print("\n".join(COMPILE_SMOKE_TEST_CONFIGS))
+    """Emit discovered standalone compile smoke-test configs, one per line."""
+    configs = discover_standalone_configs()
+    if not configs:
+        raise ValueError(f"No standalone configs found under {CONFIGS_DIR.name}/")
+    print("\n".join(configs))
 
 
 def sync_support_files(args: argparse.Namespace) -> None:
@@ -732,7 +768,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     compile_configs_parser = subparsers.add_parser(
         "compile-configs",
-        help="Print the representative compile smoke-test configs.",
+        help="Print discovered standalone compile smoke-test configs.",
     )
     compile_configs_parser.set_defaults(func=emit_compile_configs)
 

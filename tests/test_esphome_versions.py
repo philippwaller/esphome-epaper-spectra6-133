@@ -364,6 +364,34 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         self.assertEqual(query.specifier, ">=2026.1.0,<2026.3.0")
         self.assertEqual(query.specifier_display, ">= 2026.1.0, < 2026.3.0")
 
+    def test_discover_standalone_configs_filters_and_sorts_examples(self) -> None:
+        """Discover top-level example YAML files without secrets or subdirectories."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            configs_dir = root_dir / "configs"
+            configs_dir.mkdir()
+            (configs_dir / "beta.yml").write_text("esphome:\n", encoding="utf-8")
+            (configs_dir / "alpha.yaml").write_text("esphome:\n", encoding="utf-8")
+            (configs_dir / "secrets.yaml").write_text(
+                "wifi_password: demo\n",
+                encoding="utf-8",
+            )
+            (configs_dir / "secrets.example.yaml").write_text(
+                "wifi_password: demo\n",
+                encoding="utf-8",
+            )
+            (configs_dir / "notes.txt").write_text("skip\n", encoding="utf-8")
+            nested_dir = configs_dir / "nested"
+            nested_dir.mkdir()
+            (nested_dir / "ignored.yaml").write_text("esphome:\n", encoding="utf-8")
+
+            configs = MODULE.discover_standalone_configs(
+                configs_dir,
+                root_dir=root_dir,
+            )
+
+        self.assertEqual(configs, ["configs/alpha.yaml", "configs/beta.yml"])
+
     def test_emit_matrix_uses_resolved_versions(self) -> None:
         """Build compile matrices from resolved versions and smoke-test configs."""
         args = argparse.Namespace(
@@ -376,19 +404,22 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
         with patch.object(
             MODULE, "matching_versions", return_value=["2026.1.0", "2026.2.1"]
         ):
-            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                MODULE.emit_matrix(args)
+            with patch.object(
+                MODULE,
+                "discover_standalone_configs",
+                return_value=["configs/clock.yaml", "configs/hello-world.yaml"],
+            ):
+                with patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                    MODULE.emit_matrix(args)
 
         self.assertEqual(
             json.loads(stdout.getvalue()),
             {
                 "include": [
+                    {"esphome": "2026.1.0", "config": "configs/clock.yaml"},
                     {"esphome": "2026.1.0", "config": "configs/hello-world.yaml"},
-                    {"esphome": "2026.1.0", "config": "configs/image.yaml"},
-                    {"esphome": "2026.1.0", "config": "configs/test-sheet.yaml"},
+                    {"esphome": "2026.2.1", "config": "configs/clock.yaml"},
                     {"esphome": "2026.2.1", "config": "configs/hello-world.yaml"},
-                    {"esphome": "2026.2.1", "config": "configs/image.yaml"},
-                    {"esphome": "2026.2.1", "config": "configs/test-sheet.yaml"},
                 ]
             },
         )
@@ -433,21 +464,37 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
     def test_compile_matrix_includes_each_smoke_test_config(self) -> None:
         """Ensure compile matrices include every smoke test config."""
         matrix = json.loads(
-            MODULE.compile_matrix_for_versions(["2026.1.0", "2026.2.1"])
+            MODULE.compile_matrix_for_versions(
+                ["2026.1.0", "2026.2.1"],
+                configs=["configs/clock.yaml", "configs/hello-world.yaml"],
+            )
         )
 
         self.assertEqual(
             matrix,
             {
                 "include": [
+                    {"esphome": "2026.1.0", "config": "configs/clock.yaml"},
                     {"esphome": "2026.1.0", "config": "configs/hello-world.yaml"},
-                    {"esphome": "2026.1.0", "config": "configs/image.yaml"},
-                    {"esphome": "2026.1.0", "config": "configs/test-sheet.yaml"},
+                    {"esphome": "2026.2.1", "config": "configs/clock.yaml"},
                     {"esphome": "2026.2.1", "config": "configs/hello-world.yaml"},
-                    {"esphome": "2026.2.1", "config": "configs/image.yaml"},
-                    {"esphome": "2026.2.1", "config": "configs/test-sheet.yaml"},
                 ]
             },
+        )
+
+    def test_emit_compile_configs_uses_discovered_configs(self) -> None:
+        """Print discovered compile configs one per line."""
+        with patch.object(
+            MODULE,
+            "discover_standalone_configs",
+            return_value=["configs/clock.yaml", "configs/hello-world.yaml"],
+        ):
+            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                MODULE.emit_compile_configs(argparse.Namespace())
+
+        self.assertEqual(
+            stdout.getvalue(),
+            "configs/clock.yaml\nconfigs/hello-world.yaml\n",
         )
 
     def test_cli_resolve_uses_default_requirement(self) -> None:
