@@ -126,6 +126,28 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
 
         self.assertEqual(version, "2026.3.0rc1")
 
+    def test_version_set_snapshot_hash_changes_for_stable_patch_behind_prerelease(
+        self,
+    ) -> None:
+        """Detect stable patch additions even when the latest prerelease is unchanged."""
+        query = MODULE.VersionQuery(
+            "esphome",
+            ">=2026.2.0",
+            ">= 2026.2.0",
+            include_prereleases=True,
+        )
+
+        before = MODULE.version_set_snapshot(query, ["2026.5.2", "2026.6.0b1"])
+        after = MODULE.version_set_snapshot(
+            query,
+            ["2026.5.2", "2026.5.3", "2026.6.0b1"],
+        )
+
+        self.assertEqual(before["latest_version"], "2026.6.0b1")
+        self.assertEqual(after["latest_version"], "2026.6.0b1")
+        self.assertNotEqual(before["version_set_hash"], after["version_set_hash"])
+        self.assertIn("2026.5.3", after["versions"])
+
     def test_validate_versions_compatibility_window_uses_latest_patch_per_minor(
         self,
     ) -> None:
@@ -449,6 +471,32 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
                 "specifier_display": ">= 2026.1.0, < 2026.3.0",
                 "include_prereleases": True,
                 "version": "2026.3.0rc1",
+            },
+        )
+
+    def test_emit_version_set_snapshot_outputs_json_metadata(self) -> None:
+        """Emit JSON metadata for the complete resolved ESPHome version set."""
+        args = argparse.Namespace(
+            package=None,
+            specifier=">=2026.1.0,<2026.3.0",
+            include_prereleases=True,
+            requirements_file=ROOT_DIR / "requirements.txt",
+        )
+        versions = ["2026.1.0", "2026.2.1", "2026.3.0rc1"]
+        with patch.object(MODULE, "matching_versions", return_value=versions):
+            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                MODULE.emit_version_set_snapshot(args)
+
+        self.assertEqual(
+            json.loads(stdout.getvalue()),
+            {
+                "package": "esphome",
+                "specifier": ">=2026.1.0,<2026.3.0",
+                "specifier_display": ">= 2026.1.0, < 2026.3.0",
+                "include_prereleases": True,
+                "latest_version": "2026.3.0rc1",
+                "version_set_hash": MODULE.version_set_hash(versions),
+                "versions": versions,
             },
         )
 

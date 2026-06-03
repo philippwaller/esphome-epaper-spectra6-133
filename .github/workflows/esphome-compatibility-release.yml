@@ -18,9 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
+      artifact_name: ${{ steps.artifact.outputs.name }}
       changed: ${{ steps.compare.outputs.changed }}
       current_version: ${{ steps.current.outputs.current_version }}
+      current_version_set: ${{ steps.current.outputs.version_set }}
+      current_version_set_hash: ${{ steps.current.outputs.version_set_hash }}
       previous_version: ${{ steps.previous.outputs.previous_version }}
+      previous_version_set_hash: ${{ steps.previous.outputs.version_set_hash }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-python-env
@@ -30,18 +34,30 @@ jobs:
         id: artifact
         run: |
           ref_hash="$(echo -n "$GITHUB_REF" | sha256sum | cut -c1-8)"
-          echo "name=latest-esphome-version-${ref_hash}" >> "$GITHUB_OUTPUT"
-      - name: Resolve latest ESPHome version
+          echo "name=validated-esphome-versions-${ref_hash}" >> "$GITHUB_OUTPUT"
+      - name: Resolve ESPHome version set
         id: current
         run: |
           mkdir -p artifacts
-          python scripts/esphome-versions.py latest --include-prereleases --format json > artifacts/latest-version.json
+          python scripts/esphome-versions.py snapshot --include-prereleases > artifacts/resolved-version-set.json
           current_version="$(
-            python -c 'import json; print(json.load(open("artifacts/latest-version.json", encoding="utf-8"))["version"])'
+            python -c 'import json; print(json.load(open("artifacts/resolved-version-set.json", encoding="utf-8"))["latest_version"])'
           )"
-          echo "current_version=${current_version}" >> "$GITHUB_OUTPUT"
-          echo "Current ESPHome version: ${current_version}"
-      - name: Download previous ESPHome version artifact
+          version_set_hash="$(
+            python -c 'import json; print(json.load(open("artifacts/resolved-version-set.json", encoding="utf-8"))["version_set_hash"])'
+          )"
+          version_set="$(
+            python -c 'import json; print(json.dumps(json.load(open("artifacts/resolved-version-set.json", encoding="utf-8")), sort_keys=True, separators=(",", ":")))'
+          )"
+
+          {
+            echo "current_version=${current_version}"
+            echo "version_set_hash=${version_set_hash}"
+            echo "version_set=${version_set}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Current ESPHome latest version: ${current_version}"
+          echo "Current ESPHome version set hash: ${version_set_hash}"
+      - name: Download previous validated ESPHome version set artifact
         id: previous
         env:
           GH_TOKEN: ${{ github.token }}
@@ -56,6 +72,7 @@ jobs:
           if [[ -z "${artifact_url}" ]]; then
             echo "No previous ${ARTIFACT_NAME} artifact found."
             echo "previous_version=" >> "$GITHUB_OUTPUT"
+            echo "version_set_hash=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -66,39 +83,44 @@ jobs:
             -o previous-artifact.zip
           unzip -q -o previous-artifact.zip -d previous-artifact
 
-          previous_file="$(find previous-artifact -type f -name latest-version.json | head -n 1)"
+          previous_file="$(find previous-artifact -type f -name resolved-version-set.json | head -n 1)"
           if [[ -z "${previous_file}" ]]; then
-            echo "Previous artifact did not contain latest-version.json."
+            echo "Previous artifact did not contain resolved-version-set.json."
             echo "previous_version=" >> "$GITHUB_OUTPUT"
+            echo "version_set_hash=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           previous_version="$(
-            python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("version", ""))' "${previous_file}"
+            python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("latest_version", ""))' "${previous_file}"
           )"
-          echo "previous_version=${previous_version}" >> "$GITHUB_OUTPUT"
-          echo "Previous ESPHome version: ${previous_version}"
-      - name: Compare ESPHome versions
+          version_set_hash="$(
+            python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("version_set_hash", ""))' "${previous_file}"
+          )"
+          {
+            echo "previous_version=${previous_version}"
+            echo "version_set_hash=${version_set_hash}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Previous ESPHome latest version: ${previous_version}"
+          echo "Previous ESPHome version set hash: ${version_set_hash}"
+      - name: Compare ESPHome version sets
         id: compare
         env:
           CURRENT_VERSION: ${{ steps.current.outputs.current_version }}
           PREVIOUS_VERSION: ${{ steps.previous.outputs.previous_version }}
+          CURRENT_VERSION_SET_HASH: ${{ steps.current.outputs.version_set_hash }}
+          PREVIOUS_VERSION_SET_HASH: ${{ steps.previous.outputs.version_set_hash }}
         run: |
-          if [[ -z "${PREVIOUS_VERSION}" || "${CURRENT_VERSION}" != "${PREVIOUS_VERSION}" ]]; then
+          if [[ -z "${PREVIOUS_VERSION_SET_HASH}" || "${CURRENT_VERSION_SET_HASH}" != "${PREVIOUS_VERSION_SET_HASH}" ]]; then
             changed="true"
           else
             changed="false"
           fi
 
           echo "changed=${changed}" >> "$GITHUB_OUTPUT"
-          echo "Version changed: ${changed}"
-      - name: Upload latest ESPHome version artifact
-        if: always() && steps.current.outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ steps.artifact.outputs.name }}
-          path: artifacts/latest-version.json
-          if-no-files-found: error
+          echo "Previous latest ESPHome version: ${PREVIOUS_VERSION:-none}"
+          echo "Current latest ESPHome version: ${CURRENT_VERSION}"
+          echo "Version set changed: ${changed}"
 
   esphome-compatibility:
     name: Run Release Compatibility
@@ -108,3 +130,25 @@ jobs:
     with:
       run_mode: compatibility-window
       include_prereleases: true
+
+  record-validated-version-set:
+    name: Record Validated ESPHome Version Set
+    needs:
+      - version-check
+      - esphome-compatibility
+    if: needs.version-check.outputs.changed == 'true' && needs.esphome-compatibility.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Write validated ESPHome version set artifact
+        env:
+          VERSION_SET_JSON: ${{ needs.version-check.outputs.current_version_set }}
+        run: |
+          mkdir -p artifacts
+          printf '%s\n' "${VERSION_SET_JSON}" > artifacts/resolved-version-set.json
+      - name: Upload validated ESPHome version set artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ needs.version-check.outputs.artifact_name }}
+          path: artifacts/resolved-version-set.json
+          if-no-files-found: error

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -250,6 +251,32 @@ def latest_version(versions: list[str]) -> str:
         raise ValueError("No matching versions were resolved")
 
     return sort_versions(versions)[-1]
+
+
+def version_set_hash(versions: list[str]) -> str:
+    """Return a deterministic hash for the exact resolved version set."""
+    normalized_versions = unique_sorted_versions(versions)
+    payload = "\n".join(normalized_versions)
+    if payload:
+        payload = f"{payload}\n"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def version_set_snapshot(query: VersionQuery, versions: list[str]) -> dict[str, object]:
+    """Build metadata for the exact resolved package version set."""
+    resolved = unique_sorted_versions(versions)
+    if not resolved:
+        raise ValueError("No matching versions were resolved")
+
+    return {
+        "package": query.package_name,
+        "specifier": query.specifier,
+        "specifier_display": query.specifier_display,
+        "include_prereleases": query.include_prereleases,
+        "latest_version": resolved[-1],
+        "version_set_hash": version_set_hash(resolved),
+        "versions": resolved,
+    }
 
 
 def extract_specifier_versions(specifier: str) -> list[str]:
@@ -674,6 +701,30 @@ def emit_latest_version(args: argparse.Namespace) -> None:
     print(version)
 
 
+def emit_version_set_snapshot(args: argparse.Namespace) -> None:
+    """Resolve and print JSON metadata for the exact matching version set."""
+    query = resolve_query(
+        package_name=args.package,
+        specifier=args.specifier,
+        include_prereleases=args.include_prereleases,
+        requirements_file=args.requirements_file,
+    )
+    print(
+        json.dumps(
+            version_set_snapshot(
+                query,
+                matching_versions(
+                    query.package_name,
+                    query.specifier,
+                    include_prereleases=query.include_prereleases,
+                ),
+            ),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+
+
 def emit_compile_configs(_: argparse.Namespace) -> None:
     """Emit discovered standalone compile smoke-test configs, one per line."""
     configs = discover_standalone_configs()
@@ -767,6 +818,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format for the latest version metadata.",
     )
     latest_parser.set_defaults(func=emit_latest_version)
+
+    snapshot_parser = subparsers.add_parser(
+        "snapshot",
+        help="Emit JSON metadata for the resolved package version set.",
+    )
+    add_query_arguments(snapshot_parser)
+    snapshot_parser.set_defaults(func=emit_version_set_snapshot)
 
     compile_configs_parser = subparsers.add_parser(
         "compile-configs",
