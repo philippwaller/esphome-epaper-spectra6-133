@@ -14,12 +14,21 @@ namespace esphome {
 namespace epaper_spectra6_133 {
 namespace {
 
+/// Panel palette codes used to feed already-quantized pixels into packing benchmarks.
 constexpr std::array<uint8_t, 6> kPanelCodes = {
     COLOR_BLACK, COLOR_WHITE, COLOR_YELLOW, COLOR_RED, COLOR_BLUE, COLOR_GREEN,
 };
 
-// Deterministic pseudo-image input with enough channel variation to exercise
-// nearest-palette decisions without pulling sample assets into the benchmark.
+/**
+ * Builds deterministic pseudo-image pixels for palette-mapping benchmarks.
+ *
+ * The generated pattern has enough RGB variation to exercise nearest-palette
+ * decisions without making the benchmark depend on external image assets.
+ *
+ * @param width Logical image width in pixels.
+ * @param height Logical image height in pixels.
+ * @return RGB pixels in row-major order.
+ */
 std::vector<Color> make_mixed_pixels(int width, int height) {
   std::vector<Color> pixels;
   pixels.reserve(static_cast<size_t>(width) * static_cast<size_t>(height));
@@ -36,9 +45,19 @@ std::vector<Color> make_mixed_pixels(int width, int height) {
   return pixels;
 }
 
-// Mutates a realistic rectangular dirty area in a packed framebuffer. This is
-// intentionally built through the production pixel writer so the changed-region
-// benchmarks see the same byte layout as normal rendering.
+/**
+ * Writes a clipped rectangle into a packed framebuffer using production pixel packing.
+ *
+ * Changed-region benchmarks use this helper so their inputs match the byte
+ * layout produced by normal rendering.
+ *
+ * @param buffer Full-frame packed framebuffer to mutate.
+ * @param x Left edge of the requested logical rectangle.
+ * @param y Top edge of the requested logical rectangle.
+ * @param width Requested rectangle width in pixels.
+ * @param height Requested rectangle height in pixels.
+ * @param color_code 4-bit panel palette code to write.
+ */
 void write_rect(std::vector<uint8_t> &buffer, int x, int y, int width, int height, uint8_t color_code) {
   const int x0 = std::max(0, x);
   const int y0 = std::max(0, y);
@@ -52,21 +71,31 @@ void write_rect(std::vector<uint8_t> &buffer, int x, int y, int width, int heigh
   }
 }
 
-// Thin public wrapper around the protected DisplayBuffer draw hook. It lets the
-// benchmark include production color mapping, pixel packing, and dirty tracking
-// without scheduling hardware transfers.
+/**
+ * Test-only display wrapper that exposes the protected draw hook to benchmarks.
+ *
+ * The wrapper allocates the normal framebuffer but never initializes transport
+ * hardware, allowing the benchmark to include production color mapping, pixel
+ * packing, and dirty tracking without scheduling panel transfers.
+ */
 class BenchmarkDisplay : public EpaperSpectra6133 {
  public:
+  /// Allocates the full framebuffer used by EpaperSpectra6133 drawing code.
   BenchmarkDisplay() { this->init_internal_(FULL_FRAME_SIZE); }
 
+  /// Releases the framebuffer allocated by DisplayBuffer::init_internal_().
   ~BenchmarkDisplay() override { ::operator delete(this->buffer_); }
 
+  /// Forwards one logical pixel through the production draw pipeline.
   void draw_pixel(int x, int y, Color color) { this->draw_absolute_pixel_internal(x, y, color); }
 };
 
-// Measures the pure RGB-to-Spectra-6 palette mapping hot path. This isolates
-// color classification cost for image-heavy screens before framebuffer writes
-// are considered.
+/**
+ * Benchmarks RGB-to-Spectra-6 palette mapping without framebuffer writes.
+ *
+ * This isolates color classification cost for image-heavy screens before
+ * pixel packing or dirty-region tracking are considered.
+ */
 void BM_ColorMapping_MixedPixels(benchmark::State &state) {
   const auto pixels = make_mixed_pixels(static_cast<int>(state.range(0)), static_cast<int>(state.range(1)));
   uint32_t checksum = 0;
@@ -88,8 +117,12 @@ BENCHMARK(BM_ColorMapping_MixedPixels)
     ->Args({480, 320})
     ->Args({EPD_WIDTH, EPD_HEIGHT});
 
-// Measures nibble packing alone by writing already-quantized panel color codes.
-// This represents simple UI/layout drawing where colors are known up front.
+/**
+ * Benchmarks nibble packing for pixels that are already panel palette codes.
+ *
+ * This models simple UI and layout drawing where colors are known up front and
+ * no RGB palette search is needed.
+ */
 void BM_FramebufferGeneration_WritePixels(benchmark::State &state) {
   const int width = static_cast<int>(state.range(0));
   const int height = static_cast<int>(state.range(1));
@@ -120,8 +153,12 @@ BENCHMARK(BM_FramebufferGeneration_WritePixels)
     ->Args({480, 320})
     ->Args({EPD_WIDTH, EPD_HEIGHT});
 
-// Measures the combined image-preparation path used when RGB pixels are mapped
-// to the fixed panel palette and immediately packed into the framebuffer.
+/**
+ * Benchmarks image preparation from RGB pixels into the packed framebuffer.
+ *
+ * Each iteration maps deterministic RGB input to the fixed Spectra 6 palette
+ * and immediately writes the resulting panel code into the framebuffer.
+ */
 void BM_FramebufferGeneration_ImageToFramebuffer(benchmark::State &state) {
   const int width = static_cast<int>(state.range(0));
   const int height = static_cast<int>(state.range(1));
@@ -150,8 +187,12 @@ BENCHMARK(BM_FramebufferGeneration_ImageToFramebuffer)
     ->Args({480, 320})
     ->Args({EPD_WIDTH, EPD_HEIGHT});
 
-// Measures the full display draw hook for tracked partial updates. Compared to
-// ImageToFramebuffer this also includes the change-region accumulator cost.
+/**
+ * Benchmarks the display draw hook used by tracked partial updates.
+ *
+ * Compared with the raw image-to-framebuffer benchmark, this path also includes
+ * DisplayBuffer dispatch and the tracked changed-region accumulator.
+ */
 void BM_DisplayDrawPipeline_TrackedPixels(benchmark::State &state) {
   const int width = static_cast<int>(state.range(0));
   const int height = static_cast<int>(state.range(1));
@@ -185,8 +226,14 @@ BENCHMARK(BM_DisplayDrawPipeline_TrackedPixels)
     ->Args({480, 320})
     ->Args({EPD_WIDTH, EPD_HEIGHT});
 
-// Measures the fast clear/fill path used before full refreshes and explicit
-// clear(color) calls. Each capture uses one real panel palette byte.
+/**
+ * Benchmarks filling the full framebuffer with one packed panel color.
+ *
+ * This is the fast path used by full refresh preparation and explicit
+ * clear(color) calls. Each capture supplies one real Spectra 6 palette code.
+ *
+ * @param color_code 4-bit panel palette code used for every pixel.
+ */
 void BM_FramebufferFill(benchmark::State &state, uint8_t color_code) {
   std::vector<uint8_t> buffer(FULL_FRAME_SIZE, COLOR_BLACK);
 
@@ -206,8 +253,12 @@ BENCHMARK_CAPTURE(BM_FramebufferFill, red, COLOR_RED)->Name("FramebufferGenerati
 BENCHMARK_CAPTURE(BM_FramebufferFill, blue, COLOR_BLUE)->Name("FramebufferGeneration/FillFullFrame/blue");
 BENCHMARK_CAPTURE(BM_FramebufferFill, green, COLOR_GREEN)->Name("FramebufferGeneration/FillFullFrame/green");
 
-// Measures the vendor-style color-bar preparation path, which is row-oriented
-// and should remain close to full-frame memset performance.
+/**
+ * Benchmarks generation of the vendor-style color-bar test pattern.
+ *
+ * The implementation fills whole rows and should remain close to full-frame
+ * memset performance.
+ */
 void BM_DisplayPattern_ColorBar(benchmark::State &state) {
   std::vector<uint8_t> buffer(FULL_FRAME_SIZE, COLOR_BLACK);
 
@@ -222,8 +273,12 @@ void BM_DisplayPattern_ColorBar(benchmark::State &state) {
 
 BENCHMARK(BM_DisplayPattern_ColorBar)->Name("DisplayPreparation/ColorBarPattern");
 
-// Measures the tiled checkerboard pattern used for visual panel checks. This is
-// more segmented than the color bar and catches regressions in row/cell filling.
+/**
+ * Benchmarks generation of the tiled checkerboard panel test pattern.
+ *
+ * This pattern is more segmented than the color bar, so it catches regressions
+ * in row and cell filling behavior.
+ */
 void BM_DisplayPattern_Checkerboard(benchmark::State &state) {
   std::vector<uint8_t> buffer(FULL_FRAME_SIZE, COLOR_BLACK);
 
@@ -238,8 +293,12 @@ void BM_DisplayPattern_Checkerboard(benchmark::State &state) {
 
 BENCHMARK(BM_DisplayPattern_Checkerboard)->Name("DisplayPreparation/CheckerboardPattern");
 
-// Measures the compare-mode best case: no bytes changed. The implementation
-// still scans row-by-row, so this protects the common "skip refresh" path.
+/**
+ * Benchmarks changed-region detection when current and previous frames match.
+ *
+ * This is compare-mode's best case: no bytes changed, but the implementation
+ * still scans row-by-row to protect the common "skip refresh" path.
+ */
 void BM_ChangedRegion_IdenticalFullFrame(benchmark::State &state) {
   std::vector<uint8_t> current(FULL_FRAME_SIZE, COLOR_WHITE);
   std::vector<uint8_t> previous(FULL_FRAME_SIZE, COLOR_WHITE);
@@ -255,8 +314,13 @@ void BM_ChangedRegion_IdenticalFullFrame(benchmark::State &state) {
 
 BENCHMARK(BM_ChangedRegion_IdenticalFullFrame)->Name("ChangeDetection/IdenticalFullFrame");
 
-// Models a small clock/status update near the right side of the display. The
-// region is tiny, but compare mode must still locate it inside a full frame.
+/**
+ * Benchmarks changed-region detection for a small clock/status patch.
+ *
+ * The dirty area is near the right side of the display and is tiny relative to
+ * the full framebuffer, but compare mode must still locate it inside a full
+ * frame scan.
+ */
 void BM_ChangedRegion_SmallClockPatch(benchmark::State &state) {
   std::vector<uint8_t> current(FULL_FRAME_SIZE, COLOR_WHITE);
   std::vector<uint8_t> previous(FULL_FRAME_SIZE, COLOR_WHITE);
@@ -273,8 +337,12 @@ void BM_ChangedRegion_SmallClockPatch(benchmark::State &state) {
 
 BENCHMARK(BM_ChangedRegion_SmallClockPatch)->Name("ChangeDetection/SmallClockPatch");
 
-// Models a medium dashboard card update, large enough to span many rows while
-// still benefiting from partial refresh instead of full-frame transfer.
+/**
+ * Benchmarks changed-region detection for a medium dashboard-card update.
+ *
+ * The dirty area spans many rows while still being small enough to benefit
+ * from partial refresh instead of full-frame transfer.
+ */
 void BM_ChangedRegion_MediumDashboardCard(benchmark::State &state) {
   std::vector<uint8_t> current(FULL_FRAME_SIZE, COLOR_WHITE);
   std::vector<uint8_t> previous(FULL_FRAME_SIZE, COLOR_WHITE);
@@ -291,8 +359,12 @@ void BM_ChangedRegion_MediumDashboardCard(benchmark::State &state) {
 
 BENCHMARK(BM_ChangedRegion_MediumDashboardCard)->Name("ChangeDetection/MediumDashboardCard");
 
-// Measures the compare-mode worst-case shape where every row differs. This
-// should stay fast because the first and last differing byte are found quickly.
+/**
+ * Benchmarks changed-region detection when every row differs.
+ *
+ * This is the compare-mode full-frame change shape. It should stay fast because
+ * the first and last differing byte in each changed row are found quickly.
+ */
 void BM_ChangedRegion_FullFrameChanged(benchmark::State &state) {
   std::vector<uint8_t> current(FULL_FRAME_SIZE, COLOR_BLACK);
   std::vector<uint8_t> previous(FULL_FRAME_SIZE, COLOR_WHITE);
@@ -308,16 +380,27 @@ void BM_ChangedRegion_FullFrameChanged(benchmark::State &state) {
 
 BENCHMARK(BM_ChangedRegion_FullFrameChanged)->Name("ChangeDetection/FullFrameChanged");
 
+/// Logical rectangle fixture used by partial-region computation benchmarks.
 struct RegionCase {
+  /// Requested left edge in logical panel coordinates.
   int x;
+  /// Requested top edge in logical panel coordinates.
   int y;
+  /// Requested logical rectangle width in pixels.
   int width;
+  /// Requested logical rectangle height in pixels.
   int height;
 };
 
-// Measures logical rectangle clipping, controller-half splitting, and hardware
-// alignment. Each benchmark iteration batches many calls so tiny nanosecond
-// operations produce stable trend data for Bencher.
+/**
+ * Benchmarks conversion from logical dirty rectangles to controller regions.
+ *
+ * This covers clipping, splitting across the two controller halves, horizontal
+ * alignment, and even-row adjustment. Each benchmark iteration batches many
+ * computations so tiny operations produce stable trend data for Bencher.
+ *
+ * @param input Logical rectangle shape to perturb and convert repeatedly.
+ */
 void BM_PartialRegion_Computation(benchmark::State &state, RegionCase input) {
   static constexpr int kComputationsPerIteration = 1024;
   Transport transport;
