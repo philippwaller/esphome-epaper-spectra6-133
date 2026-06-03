@@ -1,0 +1,26 @@
+name: Archive Bencher PR Branch
+on:
+  pull_request_target:
+    types: [closed]
+permissions:
+  contents: read
+jobs:
+  archive-pr-branch:
+    name: Archive PR Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BENCHER_PROJECT: ${{ vars.BENCHER_PROJECT }}
+      BENCHER_API_KEY: ${{ secrets.BENCHER_API_KEY }}
+      PR_BRANCH: pr-${{ github.event.pull_request.number }}
+    steps:
+      - name: Install Bencher CLI
+        if: env.BENCHER_PROJECT != '' && env.BENCHER_API_KEY != ''
+        uses: bencherdev/bencher@main
+      - name: Archive closed PR branch with Bencher
+        if: env.BENCHER_PROJECT != '' && env.BENCHER_API_KEY != ''
+        run: |
+          bencher archive \
+            --project "$BENCHER_PROJECT" \
+            --key "$BENCHER_API_KEY" \
+            --branch "$PR_BRANCH"

@@ -1,0 +1,83 @@
+name: Track Benchmarks with Bencher
+on:
+  workflow_run:
+    workflows: [Run Benchmarks]
+    types: [completed]
+permissions:
+  actions: read
+  contents: read
+  checks: write
+  pull-requests: write
+jobs:
+  track-pr-branch:
+    name: Track PR Benchmarks
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ARTIFACT_DIR: bencher-pr-artifacts
+      BENCHMARK_RESULTS: bencher-pr-artifacts/results.json
+      PR_EVENT: bencher-pr-artifacts/event.json
+      BENCHER_PROJECT: ${{ vars.BENCHER_PROJECT }}
+      BENCHER_API_KEY: ${{ secrets.BENCHER_API_KEY }}
+    steps:
+      - name: Download benchmark results
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: host-cpp-benchmark-results
+          path: ${{ env.ARTIFACT_DIR }}
+          run_id: ${{ github.event.workflow_run.id }}
+      - name: Download pull request event
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: github-pr-event
+          path: ${{ env.ARTIFACT_DIR }}
+          run_id: ${{ github.event.workflow_run.id }}
+      - name: Export pull request metadata
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ["PR_EVENT"]).read_text())
+          pull_request = event["pull_request"]
+          values = {
+              "PR_BRANCH": f"pr-{event['number']}",
+              "PR_HEAD": pull_request["head"]["ref"],
+              "PR_HEAD_SHA": pull_request["head"]["sha"],
+              "PR_BASE": pull_request["base"]["ref"],
+              "PR_BASE_SHA": pull_request["base"]["sha"],
+              "PR_NUMBER": str(event["number"]),
+          }
+
+          with Path(os.environ["GITHUB_ENV"]).open("a") as env_file:
+              for key, value in values.items():
+                  print(f"{key}={value}", file=env_file)
+          PY
+      - name: Validate benchmark artifact
+        run: |
+          test -s "$BENCHMARK_RESULTS"
+          test "$(wc -c < "$BENCHMARK_RESULTS")" -le 5000000
+          python3 -m json.tool "$BENCHMARK_RESULTS" >/dev/null
+      - name: Install Bencher CLI
+        if: env.BENCHER_PROJECT != '' && env.BENCHER_API_KEY != ''
+        uses: bencherdev/bencher@main
+      - name: Track PR benchmarks with Bencher
+        if: env.BENCHER_PROJECT != '' && env.BENCHER_API_KEY != ''
+        run: |
+          bencher run \
+            --project "$BENCHER_PROJECT" \
+            --key "$BENCHER_API_KEY" \
+            --branch "$PR_BRANCH" \
+            --hash "$PR_HEAD_SHA" \
+            --start-point "$PR_BASE" \
+            --start-point-hash "$PR_BASE_SHA" \
+            --start-point-clone-thresholds \
+            --start-point-reset \
+            --testbed ubuntu-latest \
+            --error-on-alert \
+            --adapter cpp_google \
+            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
+            --ci-number "$PR_NUMBER" \
+            --file "$BENCHMARK_RESULTS"
