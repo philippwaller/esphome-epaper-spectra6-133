@@ -19,6 +19,12 @@ constexpr std::array<uint8_t, 6> kPanelCodes = {
     COLOR_BLACK, COLOR_WHITE, COLOR_YELLOW, COLOR_RED, COLOR_BLUE, COLOR_GREEN,
 };
 
+/// Builds the byte value used to initialize both pixels stored in one framebuffer byte.
+uint8_t packed_fill_byte(uint8_t color_code) {
+  const uint8_t nibble = static_cast<uint8_t>(color_code & 0x0F);
+  return static_cast<uint8_t>((nibble << 4) | nibble);
+}
+
 /**
  * Builds deterministic pseudo-image pixels for palette-mapping benchmarks.
  *
@@ -93,8 +99,8 @@ class BenchmarkDisplay : public EpaperSpectra6133 {
 /**
  * Benchmarks RGB-to-Spectra-6 palette mapping without framebuffer writes.
  *
-  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
-  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_white);
+ * This isolates color classification cost for image-heavy screens before
+ * pixel packing or dirty-region tracking are considered.
  */
 void BM_ColorMapping_MixedPixels(benchmark::State &state) {
   const auto pixels = make_mixed_pixels(static_cast<int>(state.range(0)), static_cast<int>(state.range(1)));
@@ -104,8 +110,6 @@ void BM_ColorMapping_MixedPixels(benchmark::State &state) {
     for (const Color &color : pixels) {
       checksum += color_to_code(color);
     }
-    benchmark::DoNotOptimize(checksum);
-  }
     benchmark::DoNotOptimize(checksum);
   }
 
@@ -128,8 +132,8 @@ BENCHMARK(BM_ColorMapping_MixedPixels)
 void BM_FramebufferGeneration_WritePixels(benchmark::State &state) {
   const int width = static_cast<int>(state.range(0));
   const int height = static_cast<int>(state.range(1));
-  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
-  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_white);
+  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
+
   for (auto _ : state) {
     size_t palette_index = 0;
     for (int y = 0; y < height; y++) {
@@ -165,7 +169,7 @@ void BM_FramebufferGeneration_ImageToFramebuffer(benchmark::State &state) {
   const int width = static_cast<int>(state.range(0));
   const int height = static_cast<int>(state.range(1));
   const auto pixels = make_mixed_pixels(width, height);
-  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, COLOR_WHITE);
+  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
 
   for (auto _ : state) {
     size_t pixel_index = 0;
@@ -237,15 +241,15 @@ BENCHMARK(BM_DisplayDrawPipeline_TrackedPixels)
  * @param color_code 4-bit panel palette code used for every pixel.
  */
 void BM_FramebufferFill(benchmark::State &state, uint8_t color_code) {
-  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, COLOR_BLACK);
+  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_fill_byte(COLOR_BLACK));
 
   for (auto _ : state) {
     fill_buffer_with_code(buffer.data(), color_code);
     benchmark::DoNotOptimize(buffer.data());
     benchmark::ClobberMemory();
-  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
-  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_white);
-  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_white);
+  }
+
+  state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(FULL_FRAME_SIZE));
 }
 
 BENCHMARK_CAPTURE(BM_FramebufferFill, black, COLOR_BLACK)->Name("FramebufferGeneration/FillFullFrame/black");
@@ -260,9 +264,9 @@ BENCHMARK_CAPTURE(BM_FramebufferFill, green, COLOR_GREEN)->Name("FramebufferGene
  *
  * The implementation fills whole rows and should remain close to full-frame
  * memset performance.
-  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
-  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_white);
-  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_white);
+ */
+void BM_DisplayPattern_ColorBar(benchmark::State &state) {
+  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_fill_byte(COLOR_BLACK));
 
   for (auto _ : state) {
     draw_color_bar(buffer.data());
@@ -278,11 +282,11 @@ BENCHMARK(BM_DisplayPattern_ColorBar)->Name("DisplayPreparation/ColorBarPattern"
 /**
  * Benchmarks generation of the tiled checkerboard panel test pattern.
  *
-  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
-  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_white);
-  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_white);
+ * This pattern is more segmented than the color bar, so it catches regressions
+ * in row and cell filling behavior.
+ */
 void BM_DisplayPattern_Checkerboard(benchmark::State &state) {
-  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, COLOR_BLACK);
+  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_fill_byte(COLOR_BLACK));
 
   for (auto _ : state) {
     draw_checkerboard(buffer.data());
@@ -296,15 +300,14 @@ void BM_DisplayPattern_Checkerboard(benchmark::State &state) {
 BENCHMARK(BM_DisplayPattern_Checkerboard)->Name("DisplayPreparation/CheckerboardPattern");
 
 /**
-  const uint8_t packed_black = static_cast<uint8_t>((COLOR_BLACK << 4) | COLOR_BLACK);
-  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
-  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_black);
-  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_white);
+ * Benchmarks changed-region detection when current and previous frames match.
+ *
+ * This is compare-mode's best case: no bytes changed, but the implementation
  * still scans row-by-row to protect the common "skip refresh" path.
  */
 void BM_ChangedRegion_IdenticalFullFrame(benchmark::State &state) {
-  std::vector<uint8_t> current(FULL_FRAME_SIZE, COLOR_WHITE);
-  std::vector<uint8_t> previous(FULL_FRAME_SIZE, COLOR_WHITE);
+  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
+  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
 
   for (auto _ : state) {
     const UpdateRegion region = find_changed_region(current.data(), previous.data());
@@ -325,8 +328,8 @@ BENCHMARK(BM_ChangedRegion_IdenticalFullFrame)->Name("ChangeDetection/IdenticalF
  * frame scan.
  */
 void BM_ChangedRegion_SmallClockPatch(benchmark::State &state) {
-  std::vector<uint8_t> current(FULL_FRAME_SIZE, COLOR_WHITE);
-  std::vector<uint8_t> previous(FULL_FRAME_SIZE, COLOR_WHITE);
+  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
+  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
   write_rect(current, 1010, 48, 96, 176, COLOR_RED);
 
   for (auto _ : state) {
@@ -347,8 +350,8 @@ BENCHMARK(BM_ChangedRegion_SmallClockPatch)->Name("ChangeDetection/SmallClockPat
  * from partial refresh instead of full-frame transfer.
  */
 void BM_ChangedRegion_MediumDashboardCard(benchmark::State &state) {
-  std::vector<uint8_t> current(FULL_FRAME_SIZE, COLOR_WHITE);
-  std::vector<uint8_t> previous(FULL_FRAME_SIZE, COLOR_WHITE);
+  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
+  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
   write_rect(current, 280, 460, 520, 320, COLOR_BLUE);
 
   for (auto _ : state) {
@@ -369,8 +372,8 @@ BENCHMARK(BM_ChangedRegion_MediumDashboardCard)->Name("ChangeDetection/MediumDas
  * the first and last differing byte in each changed row are found quickly.
  */
 void BM_ChangedRegion_FullFrameChanged(benchmark::State &state) {
-  std::vector<uint8_t> current(FULL_FRAME_SIZE, COLOR_BLACK);
-  std::vector<uint8_t> previous(FULL_FRAME_SIZE, COLOR_WHITE);
+  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_fill_byte(COLOR_BLACK));
+  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
 
   for (auto _ : state) {
     const UpdateRegion region = find_changed_region(current.data(), previous.data());
