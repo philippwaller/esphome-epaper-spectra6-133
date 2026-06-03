@@ -208,8 +208,12 @@ cleanup() {
   fi
 
   if [[ "${STASH_CREATED}" -eq 1 && "${STASH_RESTORED}" -eq 0 ]]; then
+    local restore_status
     restore_stash_if_needed
-    status=$?
+    restore_status=$?
+    if [[ "${status}" -eq 0 ]]; then
+      status="${restore_status}"
+    fi
   fi
 
   exit "${status}"
