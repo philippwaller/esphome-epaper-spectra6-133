@@ -82,16 +82,18 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-python-env
         with:
-          cache-dependency-path: .pre-commit-config.yaml
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
       - name: Restore pre-commit hook environments
         uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-      - name: Install pre-commit
-        run: python -m pip install --disable-pip-version-check pre-commit
+      - name: Set up local developer environment
+        run: bash ./scripts/setup.sh
       - name: Run pre-commit checks
-        run: pre-commit run --all-files --show-diff-on-failure
+        run: ./.venv/bin/pre-commit run --all-files --show-diff-on-failure
 
   cpp-tests:
     name: Host C++ Tests
