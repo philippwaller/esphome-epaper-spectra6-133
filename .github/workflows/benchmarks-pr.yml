@@ -24,6 +24,12 @@ jobs:
     env:
       BENCHMARK_RESULTS: build/benchmarks/results.json
     steps:
+      - name: Upload pull request event
+        uses: actions/upload-artifact@v7
+        with:
+          name: github-pr-event
+          path: ${{ github.event_path }}
+          if-no-files-found: error
       - uses: actions/checkout@v6
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -35,10 +41,4 @@ jobs:
         with:
           name: host-cpp-benchmark-results
           path: ${{ env.BENCHMARK_RESULTS }}
-          if-no-files-found: error
-      - name: Upload pull request event
-        uses: actions/upload-artifact@v7
-        with:
-          name: github-pr-event
-          path: ${{ github.event_path }}
           if-no-files-found: error
