@@ -236,8 +236,7 @@ cleanup() {
 
 extract_urls() {
   local report_path="$1"
-  python3 - "$report_path" <<'PY'
-import json
+  "${PYTHON_BIN:-python3}" - "$report_path" <<'PY'
 import sys
 from pathlib import Path
 
@@ -357,9 +356,18 @@ validate_environment() {
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git repository"
   [[ "$(git rev-parse --show-toplevel)" == "${ROOT_DIR}" ]] || die "run this script from this repository"
   command -v bencher >/dev/null 2>&1 || die "bencher CLI not found in PATH"
-  command -v python3 >/dev/null 2>&1 || die "python3 not found in PATH"
+
+  if [[ -x "${ROOT_DIR}/.venv/bin/python" ]]; then
+    PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
+  elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python3)"
+  else
+    die "python3 not found in PATH"
+  fi
+
   [[ -f "${ROOT_DIR}/scripts/run-benchmarks.sh" ]] || die "scripts/run-benchmarks.sh not found"
   positive_integer "${BASELINE_ITERATIONS}" || die "--baseline-iterations must be a positive integer"
+  positive_integer "${FEATURE_ITERATIONS}" || die "--feature-iterations must be a positive integer"
   positive_integer "${FEATURE_ITERATIONS}" || die "--feature-iterations must be a positive integer"
 
   FEATURE_BRANCH="$(git branch --show-current)"

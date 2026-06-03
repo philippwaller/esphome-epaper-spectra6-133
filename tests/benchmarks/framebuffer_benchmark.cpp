@@ -93,8 +93,8 @@ class BenchmarkDisplay : public EpaperSpectra6133 {
 /**
  * Benchmarks RGB-to-Spectra-6 palette mapping without framebuffer writes.
  *
- * This isolates color classification cost for image-heavy screens before
- * pixel packing or dirty-region tracking are considered.
+  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
+  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_white);
  */
 void BM_ColorMapping_MixedPixels(benchmark::State &state) {
   const auto pixels = make_mixed_pixels(static_cast<int>(state.range(0)), static_cast<int>(state.range(1)));
@@ -104,6 +104,8 @@ void BM_ColorMapping_MixedPixels(benchmark::State &state) {
     for (const Color &color : pixels) {
       checksum += color_to_code(color);
     }
+    benchmark::DoNotOptimize(checksum);
+  }
     benchmark::DoNotOptimize(checksum);
   }
 
@@ -126,8 +128,8 @@ BENCHMARK(BM_ColorMapping_MixedPixels)
 void BM_FramebufferGeneration_WritePixels(benchmark::State &state) {
   const int width = static_cast<int>(state.range(0));
   const int height = static_cast<int>(state.range(1));
-  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, COLOR_WHITE);
-
+  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
+  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_white);
   for (auto _ : state) {
     size_t palette_index = 0;
     for (int y = 0; y < height; y++) {
@@ -241,9 +243,9 @@ void BM_FramebufferFill(benchmark::State &state, uint8_t color_code) {
     fill_buffer_with_code(buffer.data(), color_code);
     benchmark::DoNotOptimize(buffer.data());
     benchmark::ClobberMemory();
-  }
-
-  state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(FULL_FRAME_SIZE));
+  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
+  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_white);
+  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_white);
 }
 
 BENCHMARK_CAPTURE(BM_FramebufferFill, black, COLOR_BLACK)->Name("FramebufferGeneration/FillFullFrame/black");
@@ -258,9 +260,9 @@ BENCHMARK_CAPTURE(BM_FramebufferFill, green, COLOR_GREEN)->Name("FramebufferGene
  *
  * The implementation fills whole rows and should remain close to full-frame
  * memset performance.
- */
-void BM_DisplayPattern_ColorBar(benchmark::State &state) {
-  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, COLOR_BLACK);
+  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
+  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_white);
+  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_white);
 
   for (auto _ : state) {
     draw_color_bar(buffer.data());
@@ -276,9 +278,9 @@ BENCHMARK(BM_DisplayPattern_ColorBar)->Name("DisplayPreparation/ColorBarPattern"
 /**
  * Benchmarks generation of the tiled checkerboard panel test pattern.
  *
- * This pattern is more segmented than the color bar, so it catches regressions
- * in row and cell filling behavior.
- */
+  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
+  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_white);
+  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_white);
 void BM_DisplayPattern_Checkerboard(benchmark::State &state) {
   std::vector<uint8_t> buffer(FULL_FRAME_SIZE, COLOR_BLACK);
 
@@ -294,9 +296,10 @@ void BM_DisplayPattern_Checkerboard(benchmark::State &state) {
 BENCHMARK(BM_DisplayPattern_Checkerboard)->Name("DisplayPreparation/CheckerboardPattern");
 
 /**
- * Benchmarks changed-region detection when current and previous frames match.
- *
- * This is compare-mode's best case: no bytes changed, but the implementation
+  const uint8_t packed_black = static_cast<uint8_t>((COLOR_BLACK << 4) | COLOR_BLACK);
+  const uint8_t packed_white = static_cast<uint8_t>((COLOR_WHITE << 4) | COLOR_WHITE);
+  std::vector<uint8_t> current(FULL_FRAME_SIZE, packed_black);
+  std::vector<uint8_t> previous(FULL_FRAME_SIZE, packed_white);
  * still scans row-by-row to protect the common "skip refresh" path.
  */
 void BM_ChangedRegion_IdenticalFullFrame(benchmark::State &state) {
