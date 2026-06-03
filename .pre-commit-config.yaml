@@ -56,20 +56,14 @@ repos:
         description: >-
           Fails when this repository's documented ESPHome compatibility in
           README.md or CONTRIBUTING.md is not in sync with requirements.txt.
-        entry: python scripts/esphome-versions.py sync --check
-        language: python
-        additional_dependencies:
-          - PyYAML>=6
-          - packaging>=24
+        entry: ./.venv/bin/python scripts/esphome-versions.py sync --check
+        language: system
         pass_filenames: false
         files: ^(requirements\.txt|README\.md|CONTRIBUTING\.md|scripts/esphome-versions\.py)$
       - id: test-esphome-versions
         name: test ESPHome support version script
-        entry: python -m unittest discover -s tests -p test_*.py
-        language: python
-        additional_dependencies:
-          - PyYAML>=6
-          - packaging>=24
+        entry: ./.venv/bin/python -m unittest discover -s tests -p test_*.py
+        language: system
         pass_filenames: false
         stages: [pre-push]
         files: ^(README\.md|CONTRIBUTING\.md|requirements\.txt|scripts/esphome-versions\.py|tests/test_esphome_versions\.py)$
