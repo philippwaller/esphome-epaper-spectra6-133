@@ -413,6 +413,7 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   UpdateMode update_mode_{UpdateMode::FULL};
   UpdateRegion tracked_region_{};
   uint8_t *previous_frame_buffer_{nullptr};
+  uint32_t draw_pixels_since_yield_{0};
   AsyncJob async_job_{};
   // Holds a job that arrived while the panel was in a hardware refresh stage.
   // Started automatically after the draining refresh completes.
