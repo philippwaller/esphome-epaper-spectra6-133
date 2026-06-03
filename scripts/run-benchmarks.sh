@@ -3,7 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build/benchmarks}"
-OUTPUT_PATH="${OUTPUT_PATH:-${BUILD_DIR}/results.json}"
 BENCHMARK_MIN_TIME="${BENCHMARK_MIN_TIME:-0.05s}"
 BENCHMARK_FILTER="${BENCHMARK_FILTER:-.*}"
 
@@ -57,6 +56,8 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+OUTPUT_PATH="${OUTPUT_PATH:-${BUILD_DIR}/results.json}"
 
 cmake -S "${ROOT_DIR}/tests" -B "${BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE=Release \
