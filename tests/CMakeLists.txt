@@ -5,6 +5,7 @@ project(epaper_spectra6_133_host_tests LANGUAGES CXX)
 include(CTest)
 
 option(ENABLE_COVERAGE "Build host tests with coverage instrumentation" OFF)
+option(ENABLE_BENCHMARKS "Build host benchmarks with Google Benchmark" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,12 +18,15 @@ function(enable_coverage_if_requested target_name)
   endif()
 endfunction()
 
-if(BUILD_TESTING)
+if(BUILD_TESTING OR ENABLE_BENCHMARKS)
   include(FetchContent)
+endif()
 
+if(BUILD_TESTING)
   FetchContent_Declare(
     googletest
     URL https://github.com/google/googletest/archive/refs/tags/v1.17.0.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   )
   FetchContent_MakeAvailable(googletest)
 
@@ -82,4 +86,35 @@ if(BUILD_TESTING)
   gtest_discover_tests(epaper_spectra6_133_framebuffer_tests)
   gtest_discover_tests(epaper_spectra6_133_controller_tests)
   gtest_discover_tests(epaper_spectra6_133_component_tests)
+endif()
+
+if(ENABLE_BENCHMARKS)
+  set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+
+  FetchContent_Declare(
+    googlebenchmark
+    URL https://github.com/google/benchmark/archive/refs/tags/v1.9.4.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  )
+  FetchContent_MakeAvailable(googlebenchmark)
+
+  add_executable(
+    epaper_spectra6_133_benchmarks
+    benchmarks/framebuffer_benchmark.cpp
+    support/transport_stub.cpp
+    ../components/epaper_spectra6_133/epaper_spectra6_133_controller.cpp
+    ../components/epaper_spectra6_133/epaper_spectra6_133_framebuffer.cpp
+    ../components/epaper_spectra6_133/epaper_spectra6_133.cpp
+  )
+
+  target_include_directories(
+    epaper_spectra6_133_benchmarks
+    PRIVATE
+      support
+      ../components/epaper_spectra6_133
+  )
+
+  target_link_libraries(epaper_spectra6_133_benchmarks PRIVATE benchmark::benchmark_main)
 endif()

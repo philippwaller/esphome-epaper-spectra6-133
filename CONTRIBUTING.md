@@ -78,6 +78,17 @@ bash ./scripts/run-host-tests.sh
 
 Coverage reports are written to `build/coverage/` as HTML and Cobertura XML.
 
+### Run host-side C++ benchmarks
+
+```bash
+bash ./scripts/run-benchmarks.sh
+```
+
+Benchmarks use a Release build and write Google Benchmark JSON to
+`build/benchmarks/results.json`. See [BENCHMARKS.md](BENCHMARKS.md) for the
+covered hot paths, local feature-branch regression checks, and Bencher CI
+behavior.
+
 ### Validate ESPHome configs
 
 ```bash
@@ -108,6 +119,8 @@ Then retry validation.
 ### Choose checks based on the change
 
 - Framebuffer, dirty-region, controller, or low-level C++ logic → `bash ./scripts/run-host-tests.sh`
+- Performance-sensitive framebuffer, colour, image, dirty-region, or partial-update logic → `bash ./scripts/run-benchmarks.sh`
+- Performance regression check against `main` from a feature branch → `scripts/check-performance-regression.sh`
 - Python codegen, schema, YAML, examples, or packages → `bash ./scripts/validate-configs.sh`
 - Formatting-sensitive changes → `./.venv/bin/pre-commit run --all-files`
 - Hardware-relevant display-flow changes → `./scripts/esphomew run configs/hello-world.yaml`
@@ -157,10 +170,14 @@ scripts/
 ├── validate-configs.sh             Validate standalone ESPHome example configs
 ├── esphomew                        Wrapper that runs ESPHome inside the venv
 ├── run-host-tests.sh               Build & run C++ unit tests with coverage
+├── run-benchmarks.sh               Build & run Release C++ benchmarks
+├── check-performance-regression.sh
+│                                   Compare a feature branch against a local baseline with Bencher
 └── convert_image.py                Image → 6-colour palette converter
 
 tests/
 ├── CMakeLists.txt                  CMake config for host-side tests
+├── benchmarks/                     Google Benchmark suites
 ├── framebuffer_test.cpp            Framebuffer unit tests
 ├── controller_test.cpp             Controller unit tests
 ├── component_test.cpp              Component unit tests

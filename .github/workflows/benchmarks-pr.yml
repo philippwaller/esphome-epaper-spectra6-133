@@ -1,0 +1,44 @@
+name: Run Benchmarks
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize]
+    paths:
+      - '.github/workflows/benchmarks-pr.yml'
+      - '.github/workflows/bencher-pr.yml'
+      - '.github/workflows/bencher-pr-closed.yml'
+      - 'BENCHMARKS.md'
+      - 'components/epaper_spectra6_133/**/*.{c,cc,cpp,cxx,h,hh,hpp}'
+      - 'tests/**/*.{c,cc,cpp,cxx,h,hh,hpp}'
+      - 'tests/CMakeLists.txt'
+      - 'scripts/run-benchmarks.sh'
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  benchmark-pr-branch:
+    name: Run PR Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BENCHMARK_RESULTS: build/benchmarks/results.json
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Run host benchmarks
+        run: bash ./scripts/run-benchmarks.sh --output "${BENCHMARK_RESULTS}"
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v7
+        with:
+          name: host-cpp-benchmark-results
+          path: ${{ env.BENCHMARK_RESULTS }}
+          if-no-files-found: error
+      - name: Upload pull request event
+        uses: actions/upload-artifact@v7
+        with:
+          name: github-pr-event
+          path: ${{ github.event_path }}
+          if-no-files-found: error

@@ -44,8 +44,10 @@ jobs:
               - 'components/epaper_spectra6_133/**/*.{c,cc,cpp,cxx,h,hh,hpp}'
               - 'tests/**/*.{c,cc,cpp,cxx,h,hh,hpp}'
               - 'tests/CMakeLists.txt'
+              - 'BENCHMARKS.md'
               - 'requirements-dev.txt'
               - 'scripts/setup.sh'
+              - 'scripts/run-benchmarks.sh'
               - 'scripts/run-host-tests.sh'
             esphome_configs:
               - 'configs/**/*.{yaml,yml}'
@@ -117,3 +119,54 @@ jobs:
           name: host-cpp-coverage
           path: build/coverage
           if-no-files-found: ignore
+
+  cpp-benchmarks:
+    name: Host C++ Benchmarks
+    needs: changes
+    if: >-
+      github.event_name != 'pull_request' &&
+      (needs.changes.outputs.run_all == 'true' ||
+       needs.changes.outputs.cpp == 'true' ||
+       needs.changes.outputs.ci == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+    env:
+      BENCHMARK_RESULTS: build/benchmarks/results.json
+      BENCHER_PROJECT: ${{ vars.BENCHER_PROJECT }}
+      BENCHER_API_KEY: ${{ secrets.BENCHER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run host benchmarks
+        run: bash ./scripts/run-benchmarks.sh --output "${BENCHMARK_RESULTS}"
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: host-cpp-benchmark-results
+          path: ${{ env.BENCHMARK_RESULTS }}
+          if-no-files-found: error
+      - name: Install Bencher CLI
+        if: github.event_name == 'push' && env.BENCHER_PROJECT != '' && env.BENCHER_API_KEY != ''
+        uses: bencherdev/bencher@main
+      - name: Track main benchmarks with Bencher
+        if: github.event_name == 'push' && env.BENCHER_PROJECT != '' && env.BENCHER_API_KEY != ''
+        run: |
+          bencher run \
+            --project "$BENCHER_PROJECT" \
+            --key "$BENCHER_API_KEY" \
+            --branch main \
+            --hash '${{ github.sha }}' \
+            --testbed ubuntu-latest \
+            --threshold-measure latency \
+            --threshold-test percentage \
+            --threshold-min-sample-size 5 \
+            --threshold-max-sample-size 30 \
+            --threshold-upper-boundary 0.30 \
+            --thresholds-reset \
+            --error-on-alert \
+            --adapter cpp_google \
+            --file "$BENCHMARK_RESULTS" \
+            --github-actions '${{ secrets.GITHUB_TOKEN }}'
