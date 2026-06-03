@@ -371,7 +371,6 @@ validate_environment() {
   [[ -f "${ROOT_DIR}/scripts/run-benchmarks.sh" ]] || die "scripts/run-benchmarks.sh not found"
   positive_integer "${BASELINE_ITERATIONS}" || die "--baseline-iterations must be a positive integer"
   positive_integer "${FEATURE_ITERATIONS}" || die "--feature-iterations must be a positive integer"
-  positive_integer "${FEATURE_ITERATIONS}" || die "--feature-iterations must be a positive integer"
 
   FEATURE_BRANCH="$(git branch --show-current)"
   [[ -n "${FEATURE_BRANCH}" ]] || die "detached HEAD is not supported; switch to a feature branch first"
