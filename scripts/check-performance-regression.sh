@@ -141,6 +141,9 @@ bencher_run() {
     info "${label} ..."
   fi
 
+  # Local comparison runs should not reuse credentials by accident. Running
+  # unauthenticated keeps samples in a scratch/unclaimed Bencher project instead
+  # of mutating the official repository history.
   if env -u BENCHER_PROJECT -u BENCHER_API_KEY -u BENCHER_API_TOKEN bencher "${args[@]}" >"${report_path}" 2>&1; then
     info "${label} done"
   else
