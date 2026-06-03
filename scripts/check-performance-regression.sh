@@ -336,8 +336,7 @@ validate_environment() {
   [[ "$(git rev-parse --show-toplevel)" == "${ROOT_DIR}" ]] || die "run this script from this repository"
   command -v bencher >/dev/null 2>&1 || die "bencher CLI not found in PATH"
   command -v python3 >/dev/null 2>&1 || die "python3 not found in PATH"
-  [[ -x "${ROOT_DIR}/scripts/run-benchmarks.sh" ]] || die "scripts/run-benchmarks.sh is not executable"
-
+  [[ -f "${ROOT_DIR}/scripts/run-benchmarks.sh" ]] || die "scripts/run-benchmarks.sh not found"
   positive_integer "${BASELINE_ITERATIONS}" || die "--baseline-iterations must be a positive integer"
   positive_integer "${FEATURE_ITERATIONS}" || die "--feature-iterations must be a positive integer"
 
