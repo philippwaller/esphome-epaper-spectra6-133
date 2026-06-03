@@ -82,7 +82,22 @@ random_suffix() {
     return
   fi
 
-  date '+%s' | shasum | awk '{print substr($1, 1, 6)}'
+  if command -v sha256sum >/dev/null 2>&1; then
+    date '+%s' | sha256sum | awk '{print substr($1, 1, 6)}'
+    return
+  fi
+
+  if command -v sha1sum >/dev/null 2>&1; then
+    date '+%s' | sha1sum | awk '{print substr($1, 1, 6)}'
+    return
+  fi
+
+  if command -v shasum >/dev/null 2>&1; then
+    date '+%s' | shasum | awk '{print substr($1, 1, 6)}'
+    return
+  fi
+
+  date '+%s' | cksum | awk '{printf "%06x\n", $1 % 16777216}'
 }
 
 positive_integer() {

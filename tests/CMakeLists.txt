@@ -26,7 +26,6 @@ if(BUILD_TESTING)
   FetchContent_Declare(
     googletest
     URL https://github.com/google/googletest/archive/refs/tags/v1.17.0.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   )
   FetchContent_MakeAvailable(googletest)
 
@@ -96,7 +95,6 @@ if(ENABLE_BENCHMARKS)
   FetchContent_Declare(
     googlebenchmark
     URL https://github.com/google/benchmark/archive/refs/tags/v1.9.4.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   )
   FetchContent_MakeAvailable(googlebenchmark)
 

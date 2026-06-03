@@ -72,7 +72,7 @@ void BM_ColorMapping_MixedPixels(benchmark::State &state) {
   uint32_t checksum = 0;
 
   for (auto _ : state) {
-    for (const Color color : pixels) {
+    for (const Color &color : pixels) {
       checksum += color_to_code(color);
     }
     benchmark::DoNotOptimize(checksum);
@@ -96,11 +96,14 @@ void BM_FramebufferGeneration_WritePixels(benchmark::State &state) {
   std::vector<uint8_t> buffer(FULL_FRAME_SIZE, COLOR_WHITE);
 
   for (auto _ : state) {
-    size_t pixel_index = 0;
+    size_t palette_index = 0;
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
-        write_pixel_to_buffer(buffer.data(), x, y, kPanelCodes[pixel_index % kPanelCodes.size()]);
-        pixel_index++;
+        write_pixel_to_buffer(buffer.data(), x, y, kPanelCodes[palette_index]);
+        palette_index++;
+        if (palette_index == kPanelCodes.size()) {
+          palette_index = 0;
+        }
       }
     }
     benchmark::DoNotOptimize(buffer.data());
@@ -329,9 +332,13 @@ void BM_PartialRegion_Computation(benchmark::State &state, RegionCase input) {
       const int x = input.x + (index & 0x03);
       const int y = input.y + ((index >> 2) & 0x03);
       controller.compute_partial_regions(x, y, input.width, input.height, regions, has_region);
-      region_checksum += regions[0].row_byte_offset + regions[0].row_byte_count + regions[1].row_byte_offset +
-                         regions[1].row_byte_count + static_cast<size_t>(has_region[0]) +
-                         static_cast<size_t>(has_region[1]);
+      if (has_region[0]) {
+        region_checksum += regions[0].row_byte_offset + regions[0].row_byte_count;
+      }
+      if (has_region[1]) {
+        region_checksum += regions[1].row_byte_offset + regions[1].row_byte_count;
+      }
+      region_checksum += static_cast<size_t>(has_region[0]) + static_cast<size_t>(has_region[1]);
     }
     benchmark::DoNotOptimize(region_checksum);
   }
