@@ -1,0 +1,16 @@
+name: ESPHome Compatibility Monthly
+"on":
+  schedule:
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  all-supported-versions:
+    name: Run All Supported Versions
+    uses: ./.github/workflows/esphome-compatibility.yml
+    with:
+      run_mode: all-supported-versions

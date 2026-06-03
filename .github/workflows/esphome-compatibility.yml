@@ -1,0 +1,156 @@
+name: ESPHome Compatibility
+"on":
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: Compatibility run mode
+        required: true
+        default: all-supported-versions
+        type: choice
+        options:
+          - all-supported-versions
+          - compatibility-window
+      include_prereleases:
+        description: Include ESPHome pre-releases in the resolved matrix
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      run_mode:
+        description: Compatibility run mode
+        required: true
+        type: string
+      include_prereleases:
+        description: Include ESPHome pre-releases in the resolved matrix
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: esphome-compatibility-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  run-mode:
+    name: Determine Compatibility Mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+    steps:
+      - name: Resolve requested mode
+        id: mode
+        env:
+          RUN_MODE: ${{ inputs.run_mode }}
+        run: |
+          mode="${RUN_MODE}"
+
+          case "${mode}" in
+            all-supported-versions|compatibility-window)
+              ;;
+            *)
+              echo "Unsupported compatibility mode: ${mode}" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+          echo "Resolved compatibility mode: ${mode}"
+
+  esphome-matrix:
+    name: ESPHome Version Matrix
+    needs: run-mode
+    if: needs.run-mode.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      mode: ${{ steps.matrix.outputs.mode }}
+      validate: ${{ steps.matrix.outputs.validate }}
+      compile: ${{ steps.matrix.outputs.compile }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python-env
+      - name: Install script dependencies
+        run: pip install --disable-pip-version-check "packaging>=24"
+      - name: Generate ESPHome version matrices
+        id: matrix
+        env:
+          RUN_MODE: ${{ needs.run-mode.outputs.mode }}
+          INCLUDE_PRERELEASES: ${{ inputs.include_prereleases }}
+        run: |
+          query_flags=()
+          if [[ "${INCLUDE_PRERELEASES}" == "true" ]]; then
+            query_flags+=(--include-prereleases)
+          fi
+
+          case "${RUN_MODE}" in
+            all-supported-versions)
+              validate_mode="validate-all-supported-versions"
+              compile_mode="compile-all-supported-versions"
+              ;;
+            compatibility-window)
+              validate_mode="validate-compatibility-window"
+              compile_mode="compile-compatibility-window"
+              ;;
+            *)
+              echo "Unsupported compatibility mode: ${RUN_MODE}" >&2
+              exit 1
+              ;;
+          esac
+
+          validate_result="$(python scripts/esphome-versions.py matrix "${query_flags[@]}" --mode "${validate_mode}")"
+          compile_result="$(python scripts/esphome-versions.py matrix "${query_flags[@]}" --mode "${compile_mode}")"
+
+          {
+            echo "mode=${RUN_MODE}"
+            echo "validate=${validate_result}"
+            echo "compile=${compile_result}"
+          } >> "$GITHUB_OUTPUT"
+
+  esphome-validate:
+    name: ESPHome Config Validation (${{ matrix.esphome }})
+    needs: esphome-matrix
+    if: needs.esphome-matrix.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.esphome-matrix.outputs.validate) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-esphome-env
+        with:
+          esphome-version: ${{ matrix.esphome }}
+      - name: Validate all standalone configs
+        run: bash ./scripts/validate-configs.sh
+
+  esphome-compile:
+    name: ESPHome Compile (${{ matrix.esphome }}, ${{ matrix.config }})
+    needs: esphome-matrix
+    if: needs.esphome-matrix.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.esphome-matrix.outputs.compile) }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore ESPHome compile caches
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/esphome
+          key: esphome-${{ needs.esphome-matrix.outputs.mode }}-compile-${{ runner.os }}-${{ matrix.esphome }}-${{ matrix.config }}-${{ hashFiles('configs/**/*.yaml', 'packages/**/*.yaml', 'partitions/**/*', 'components/epaper_spectra6_133/**/*', 'requirements.txt', 'requirements-dev.txt', 'scripts/esphome-versions.py', 'scripts/compile-configs.sh') }}
+          restore-keys: |
+            esphome-${{ needs.esphome-matrix.outputs.mode }}-compile-${{ runner.os }}-${{ matrix.esphome }}-
+      - uses: ./.github/actions/setup-esphome-env
+        with:
+          esphome-version: ${{ matrix.esphome }}
+      - name: Compile standalone ESPHome configs
+        run: bash ./scripts/compile-configs.sh "${{ matrix.config }}"

@@ -1,2 +1,3 @@
-esphome>=2026.4.0
+# Change the ESPHome version constraint here, then run: python scripts/esphome-versions.py sync
+esphome>=2026.2.0
 Pillow>=10.4.0,<13

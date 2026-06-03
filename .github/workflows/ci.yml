@@ -8,6 +8,7 @@ on:
     types: [checks_requested]
   workflow_dispatch:
 permissions:
+  actions: read
   contents: read
   pull-requests: read
 concurrency:
@@ -35,6 +36,7 @@ jobs:
           filters: |
             ci:
               - '.github/workflows/**/*.{yml,yaml}'
+              - '.github/actions/**/*.{yml,yaml}'
             python:
               - 'components/epaper_spectra6_133/**/*.py'
             cpp:
@@ -48,11 +50,29 @@ jobs:
             esphome_configs:
               - 'configs/**/*.{yaml,yml}'
               - 'packages/**/*.{yaml,yml}'
+              - 'partitions/**/*'
               - 'requirements.txt'
               - 'requirements-dev.txt'
+              - 'components/epaper_spectra6_133/**/*.{py,c,cc,cpp,cxx,h,hh,hpp}'
+              - '.github/actions/**/*.{yml,yaml}'
               - 'scripts/esphomew'
               - 'scripts/setup.sh'
               - 'scripts/validate-configs.sh'
+              - 'scripts/compile-configs.sh'
+              - 'scripts/esphome-versions.py'
+
+  esphome-compatibility:
+    name: ESPHome Compatibility Window
+    needs: changes
+    if: >-
+      needs.changes.outputs.run_all == 'true' ||
+      needs.changes.outputs.esphome_configs == 'true' ||
+      needs.changes.outputs.python == 'true' ||
+      needs.changes.outputs.cpp == 'true' ||
+      needs.changes.outputs.ci == 'true'
+    uses: ./.github/workflows/esphome-compatibility.yml
+    with:
+      run_mode: compatibility-window
 
   lint:
     name: Lint and Format Checks
@@ -60,20 +80,20 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: ./.github/actions/setup-python-env
         with:
-          python-version: '3.13'
-          cache: pip
-          cache-dependency-path: .pre-commit-config.yaml
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
       - name: Restore pre-commit hook environments
         uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-      - name: Install pre-commit
-        run: python -m pip install --disable-pip-version-check pre-commit
+      - name: Set up local developer environment
+        run: bash ./scripts/setup.sh
       - name: Run pre-commit checks
-        run: pre-commit run --all-files --show-diff-on-failure
+        run: ./.venv/bin/pre-commit run --all-files --show-diff-on-failure
 
   cpp-tests:
     name: Host C++ Tests
@@ -83,10 +103,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: ./.github/actions/setup-python-env
         with:
-          python-version: '3.13'
-          cache: pip
           cache-dependency-path: requirements-dev.txt
       - name: Install test dependencies
         run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
@@ -99,26 +117,3 @@ jobs:
           name: host-cpp-coverage
           path: build/coverage
           if-no-files-found: ignore
-
-  esphome-validate:
-    name: ESPHome Config Validation
-    needs: changes
-    if: >-
-      needs.changes.outputs.run_all == 'true' ||
-      needs.changes.outputs.esphome_configs == 'true' ||
-      needs.changes.outputs.python == 'true' ||
-      needs.changes.outputs.cpp == 'true' ||
-      needs.changes.outputs.ci == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
-      - name: Set up local developer environment
-        run: bash ./scripts/setup.sh
-      - name: Validate all standalone configs
-        run: bash ./scripts/validate-configs.sh

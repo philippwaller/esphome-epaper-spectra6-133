@@ -88,6 +88,16 @@ Use comments for:
 
 Do not add comments that merely repeat the code. Remove stale comments after refactors.
 
+Detailed comment rules:
+
+- Use Doxygen style for public C/C++ APIs (`/** ... */`, `@brief`, `@param`, `@return`).
+- For private C/C++ helpers, add comments only when behaviour is non-obvious, hardware-specific, or timing-sensitive.
+- Add Python module docstrings and concise docstrings for public functions, classes, and dataclasses.
+- In ESPHome codegen modules, document what users configure and how values are validated.
+- Write YAML example comments from the end-user perspective, explaining when to change an option.
+- Avoid decorative comment banners, implementation history, migration notes, and marketing language.
+- If behaviour, timing, configuration defaults, or API semantics change, update nearby documentation in the same change.
+
 ## Testing and validation
 
 Use the narrowest relevant checks before handing work back:
@@ -98,6 +108,13 @@ bash ./scripts/validate-configs.sh
 ./.venv/bin/pre-commit run --all-files
 ./scripts/esphomew run configs/hello-world.yaml
 ```
+
+Always run Python commands and tests through the project virtual environment:
+
+- Use `./.venv/bin/python -m pytest ...` for Python tests.
+- Use `./.venv/bin/python scripts/esphome-versions.py ...` for Python scripts when validation depends on project dependencies.
+- Do not use `python3 -m pytest`, `python -m pytest`, or a global interpreter for project tests.
+- If `./.venv/bin/python` is missing, run `./scripts/setup.sh` before validating.
 
 Choose checks based on the change:
 

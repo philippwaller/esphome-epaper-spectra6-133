@@ -35,7 +35,7 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.15
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
   - repo: https://github.com/pre-commit/mirrors-clang-format
@@ -51,6 +51,22 @@ repos:
         files: ^(CONTRIBUTING\.md|SECURITY\.md)$
   - repo: local
     hooks:
+      - id: check-documented-esphome-compatibility
+        name: check documented ESPHome compatibility matches requirements.txt
+        description: >-
+          Fails when this repository's documented ESPHome compatibility in
+          README.md or CONTRIBUTING.md is not in sync with requirements.txt.
+        entry: ./.venv/bin/python scripts/esphome-versions.py sync --check
+        language: system
+        pass_filenames: false
+        files: ^(requirements\.txt|README\.md|CONTRIBUTING\.md|scripts/esphome-versions\.py)$
+      - id: test-esphome-versions
+        name: test ESPHome support version script
+        entry: ./.venv/bin/python -m unittest discover -s tests -p test_*.py
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^(README\.md|CONTRIBUTING\.md|requirements\.txt|scripts/esphome-versions\.py|tests/test_esphome_versions\.py)$
       - id: validate-configs
         name: validate ESPHome configs
         entry: bash ./scripts/validate-configs.sh

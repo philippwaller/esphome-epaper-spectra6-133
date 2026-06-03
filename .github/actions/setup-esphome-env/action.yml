@@ -1,0 +1,20 @@
+name: Set up ESPHome environment
+description: Set up Python and install the requested ESPHome developer environment.
+inputs:
+  esphome-version:
+    description: ESPHome version to install.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: ./.github/actions/setup-python-env
+      with:
+        cache-dependency-path: |
+          requirements.txt
+          requirements-dev.txt
+    - name: Set up local developer environment
+      shell: bash
+      env:
+        ESPHOME_VERSION: ${{ inputs.esphome-version }}
+      run: bash ./scripts/setup.sh
