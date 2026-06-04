@@ -135,6 +135,7 @@ jobs:
       checks: write
     env:
       BENCHMARK_RESULTS: build/benchmarks/results.json
+      BENCHER_BRANCH: ${{ github.ref_name }}
       BENCHER_PROJECT: ${{ vars.BENCHER_PROJECT }}
       BENCHER_API_KEY: ${{ secrets.BENCHER_API_KEY }}
     steps:
@@ -155,7 +156,7 @@ jobs:
           env.BENCHER_PROJECT != '' &&
           env.BENCHER_API_KEY != ''
         uses: bencherdev/bencher@main
-      - name: Track main benchmarks with Bencher
+      - name: Track benchmarks with Bencher
         if: >-
           (github.event_name == 'push' ||
            github.event_name == 'workflow_dispatch') &&
@@ -165,7 +166,7 @@ jobs:
           bencher run \
             --project "$BENCHER_PROJECT" \
             --key "$BENCHER_API_KEY" \
-            --branch main \
+            --branch "$BENCHER_BRANCH" \
             --hash '${{ github.sha }}' \
             --testbed ubuntu-latest \
             --threshold-measure latency \
