@@ -10,16 +10,32 @@ required.
 
 ## Covered Hot Paths
 
-- RGB-to-panel colour mapping with realistic mixed image pixels.
-- Nibble-packed framebuffer pixel writes.
-- Image-to-framebuffer conversion using production colour mapping and packing.
-- Display draw calls with change tracking enabled.
-- Full-frame fills and built-in display preparation patterns.
+- RGB-to-panel color mapping for mixed RGB, uniformly distributed palette, and representative palette pixels.
+- Nibble-packed framebuffer writes and full-frame fills.
+- General primitive drawing in row-major order.
+- Image drawing in the column-major order used by ESPHome's `Image::draw()`.
+- Repeated drawing inside an already tracked changed region.
+- Built-in framebuffer patterns.
 - Dirty-region comparison for unchanged, small, medium, and full-frame changes.
 - Partial-region alignment for single-half, split-boundary, clipped, and full-screen regions.
 
 The input variants cover small UI/icon-sized inputs, medium dashboard/image
 regions, and the 1200x1600 worst-case panel size where applicable.
+
+## Workload Naming
+
+Benchmark names describe both the production path and the input workload:
+
+- `MixedRGB` uses arbitrary RGB values and primarily exercises nearest-palette matching.
+- `UniformPalette` distributes the six exact Spectra 6 colors evenly.
+- `RepresentativePalette` uses a deterministic full-frame distribution based on the example image: 46% black, 20% white, 11% each red, green, and blue, and 1% yellow.
+- `PrimitiveRowMajor` models general drawing primitives.
+- `ImageColumnMajor` matches the traversal order used by ESPHome's image component.
+- `ContainedOverdraw` measures repeated drawing after the changed-region bounds are already established.
+
+Image clipping is not benchmarked separately because ESPHome clips images
+before pixels reach the display component. Hardware refresh and RGB565 image
+decoding are also outside the host benchmark scope.
 
 ## Run Locally
 
