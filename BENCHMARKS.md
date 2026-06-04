@@ -10,7 +10,7 @@ required.
 
 ## Covered Hot Paths
 
-- RGB-to-panel colour mapping for mixed RGB, uniformly distributed palette, and representative palette pixels.
+- RGB-to-panel color mapping for mixed RGB, uniformly distributed palette, and representative palette pixels.
 - Nibble-packed framebuffer writes and full-frame fills.
 - General primitive drawing in row-major order.
 - Image drawing in the column-major order used by ESPHome's `Image::draw()`.
@@ -27,7 +27,7 @@ regions, and the 1200x1600 worst-case panel size where applicable.
 Benchmark names describe both the production path and the input workload:
 
 - `MixedRGB` uses arbitrary RGB values and primarily exercises nearest-palette matching.
-- `UniformPalette` distributes the six exact Spectra 6 colours evenly.
+- `UniformPalette` distributes the six exact Spectra 6 colors evenly.
 - `RepresentativePalette` uses a deterministic full-frame distribution based on the example image: 46% black, 20% white, 11% each red, green, and blue, and 1% yellow.
 - `PrimitiveRowMajor` models general drawing primitives.
 - `ImageColumnMajor` matches the traversal order used by ESPHome's image component.
