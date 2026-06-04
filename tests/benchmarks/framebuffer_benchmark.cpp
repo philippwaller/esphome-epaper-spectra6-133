@@ -403,7 +403,7 @@ struct RegionCase {
  *
  * This covers clipping, splitting across the two controller halves, horizontal
  * alignment, and even-row adjustment. Each benchmark iteration batches many
- * computations so tiny operations produce stable trend data for Bencher.
+ * computations so tiny operations produce stable trend data for CodSpeed.
  *
  * @param input Logical rectangle shape to perturb and convert repeatedly.
  */

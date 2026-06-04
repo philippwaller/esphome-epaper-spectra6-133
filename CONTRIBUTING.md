@@ -86,8 +86,7 @@ bash ./scripts/run-benchmarks.sh
 
 Benchmarks use a Release build and write Google Benchmark JSON to
 `build/benchmarks/results.json`. See [BENCHMARKS.md](BENCHMARKS.md) for the
-covered hot paths, local feature-branch regression checks, and Bencher CI
-behavior.
+covered hot paths, local execution options, and CodSpeed CI behavior.
 
 ### Validate ESPHome configs
 
@@ -120,7 +119,6 @@ Then retry validation.
 
 - Framebuffer, dirty-region, controller, or low-level C++ logic → `bash ./scripts/run-host-tests.sh`
 - Performance-sensitive framebuffer, colour, image, dirty-region, or partial-update logic → `bash ./scripts/run-benchmarks.sh`
-- Performance regression check against `main` from a feature branch → `scripts/check-performance-regression.sh`
 - Python codegen, schema, YAML, examples, or packages → `bash ./scripts/validate-configs.sh`
 - Formatting-sensitive changes → `./.venv/bin/pre-commit run --all-files`
 - Hardware-relevant display-flow changes → `./scripts/esphomew run configs/hello-world.yaml`
@@ -171,8 +169,6 @@ scripts/
 ├── esphomew                        Wrapper that runs ESPHome inside the venv
 ├── run-host-tests.sh               Build & run C++ unit tests with coverage
 ├── run-benchmarks.sh               Build & run Release C++ benchmarks
-├── check-performance-regression.sh
-│                                   Compare a feature branch against a local baseline with Bencher
 └── convert_image.py                Image → 6-colour palette converter
 
 tests/
