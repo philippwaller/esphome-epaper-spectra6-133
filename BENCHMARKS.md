@@ -54,94 +54,12 @@ Extra Google Benchmark arguments can be passed after `--`:
 bash ./scripts/run-benchmarks.sh -- --benchmark_repetitions=3
 ```
 
-## Check a Feature Branch Locally
+## CI and CodSpeed
 
-Install the Bencher CLI before running the local regression workflow:
+The `CodSpeed` workflow in `.github/workflows/codspeed.yml` builds and runs the
+benchmark suite in simulation mode for pushes to `main`, pull requests, and
+manual backtest runs. CodSpeed tracks benchmark history and reports performance
+changes directly on pull requests.
 
-```bash
-curl --proto '=https' --tlsv1.2 -sSfL https://bencher.dev/download/install-cli.sh | sh
-bencher --version
-```
-
-Use `scripts/check-performance-regression.sh` when you want to compare
-the branch you are developing against a baseline branch before opening or
-updating a pull request. Run it from the feature branch, not from `main`:
-
-```bash
-scripts/check-performance-regression.sh
-```
-
-The script temporarily stashes local changes, switches to `main`, records five
-baseline samples, switches back to the original feature branch, restores the
-stash, and records one feature sample. Results are written to an isolated
-Bencher scratch project by default, so local development runs do not update the
-official repository project configured in CI.
-
-For a faster smoke test during active development:
-
-```bash
-scripts/check-performance-regression.sh \
-  --baseline-iterations 1 \
-  --feature-iterations 1 \
-  --filter 'ColorMapping/MixedPixels/64/64'
-```
-
-If `main` does not yet contain the benchmark infrastructure, use a temporary
-baseline branch that has the benchmark files but does not include the feature
-change being measured:
-
-```bash
-scripts/check-performance-regression.sh \
-  --baseline-branch benchmark-baseline \
-  --baseline-iterations 1 \
-  --feature-iterations 1
-```
-
-To continue adding samples to the same local Bencher scratch project, pass a
-fixed project slug:
-
-```bash
-scripts/check-performance-regression.sh \
-  --project-slug esphome-epaper-spectra6-local-my-test
-```
-
-Use `--verbose` when debugging command output. By default, detailed logs,
-Google Benchmark JSON files, and Bencher responses are stored under:
-
-```text
-build/bencher-local/
-```
-
-## CI and Bencher
-
-The `Host C++ Benchmarks` job in `.github/workflows/ci.yml` runs the benchmark
-script for relevant C++ or CI changes on trusted non-PR events, uploads
-`build/benchmarks/results.json` as a workflow artifact, and tracks history in Bencher.
-
-Pull requests use the two-workflow pattern recommended by Bencher for fork
-support:
-
-- `.github/workflows/benchmarks-pr.yml` runs benchmarks in the `pull_request`
-  context and uploads only artifacts. It does not receive or use secrets.
-- `.github/workflows/bencher-pr.yml` runs later in the `workflow_run` context,
-  downloads the benchmark result and PR event artifacts, validates the JSON, and
-  uploads the result to Bencher with repository secrets.
-- `.github/workflows/bencher-pr-closed.yml` archives the synthetic Bencher PR
-  branch when the pull request closes.
-
-Bencher reporting is enabled when both of these repository settings exist:
-
-- Repository secret: `BENCHER_API_KEY`
-- Repository variable: `BENCHER_PROJECT`
-
-CI sends the Google Benchmark JSON file to Bencher with the `cpp_google`
-adapter. On `main`, it maintains a latency threshold using a percentage test:
-after at least five historical samples, a benchmark alerts when it is more than
-30% slower than the recent historical mean. Pull requests are tracked on a
-synthetic `pr-<number>` Bencher branch, clone the `main` thresholds, and use
-`--error-on-alert`, so a regression alert fails the PR check.
-
-Fork pull requests are supported because the benchmark run and Bencher upload are
-separate. Untrusted fork code can produce benchmark JSON, but the workflow that
-has `BENCHER_API_KEY` only downloads and validates artifacts; it does not check
-out or execute fork code.
+The workflow uses GitHub's OpenID Connect integration, so no repository API key
+is required.
