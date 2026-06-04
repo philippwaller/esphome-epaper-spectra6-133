@@ -1,5 +1,5 @@
 -r requirements.txt
-gcovr>=7.2,<9
+gcovr>=8.6,<9
 packaging>=26.2
 pre-commit>=4.6.0,<5
 pytest>=9.0.3
