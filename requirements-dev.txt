@@ -1,6 +1,6 @@
 -r requirements.txt
 gcovr>=7.2,<9
-packaging>=24
+packaging>=24.2
 pre-commit>=4.6.0,<5
 pytest>=9.0.3
 PyYAML>=6.0.3
