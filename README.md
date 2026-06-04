@@ -10,6 +10,7 @@
 [![ESPHome](https://img.shields.io/badge/ESPHome-%3E%3D%202026.2.0-000000?logo=esphome&logoColor=white)](https://esphome.io)
 [![GitHub Release](https://img.shields.io/github/v/release/philippwaller/esphome-epaper-spectra6-133?logo=github)](https://github.com/philippwaller/esphome-epaper-spectra6-133/releases)
 [![CI](https://github.com/philippwaller/esphome-epaper-spectra6-133/actions/workflows/ci.yml/badge.svg)](https://github.com/philippwaller/esphome-epaper-spectra6-133/actions/workflows/ci.yml)
+[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/philippwaller/esphome-epaper-spectra6-133?utm_source=badge)
 
 
 **Build dashboards, photoframes, and data displays on 13.3″ Spectra 6 e-paper panels with the ESPHome display model you already know.**

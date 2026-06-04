@@ -94,7 +94,9 @@ if(ENABLE_BENCHMARKS)
 
   FetchContent_Declare(
     googlebenchmark
-    URL https://github.com/google/benchmark/archive/refs/tags/v1.9.4.zip
+    GIT_REPOSITORY https://github.com/CodSpeedHQ/codspeed-cpp
+    SOURCE_SUBDIR google_benchmark
+    GIT_TAG main
   )
   FetchContent_MakeAvailable(googlebenchmark)
 
