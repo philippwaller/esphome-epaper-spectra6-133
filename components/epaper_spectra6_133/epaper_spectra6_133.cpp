@@ -273,7 +273,7 @@ void HOT EpaperSpectra6133::draw_absolute_pixel_internal(int x, int y, Color col
   if (++this->draw_pixels_since_yield_ >= DRAW_PIXELS_PER_YIELD) {
     this->draw_pixels_since_yield_ = 0;
     App.feed_wdt();
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(1);  // ensure at least one tick so lower-priority IDLE can execute
   }
 
   // Expand the tracked change region to include this pixel.
