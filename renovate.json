@@ -1,27 +1,21 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    "helpers:pinGitHubActionDigests",
-    ":configMigration"
+    "config:best-practices",
+    ":enablePreCommit"
   ],
   "timezone": "Europe/Berlin",
   "schedule": [
     "after 6:00am and before 7:00am on monday"
   ],
-  "dependencyDashboard": true,
   "dependencyDashboardOSVVulnerabilitySummary": "unresolved",
   "osvVulnerabilityAlerts": true,
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
   "semanticCommitScope": "deps",
   "prConcurrentLimit": 5,
-  "pre-commit": {
-    "enabled": true
-  },
   "packageRules": [
     {
-      "description": "Group GitHub Actions updates like Dependabot did.",
       "matchManagers": [
         "github-actions"
       ],
@@ -29,7 +23,6 @@
       "groupSlug": "github-actions"
     },
     {
-      "description": "Group Python requirements updates like Dependabot did.",
       "matchManagers": [
         "pip_requirements"
       ],
@@ -38,7 +31,6 @@
       "rangeStrategy": "bump"
     },
     {
-      "description": "Group pre-commit hook updates.",
       "matchManagers": [
         "pre-commit"
       ],
