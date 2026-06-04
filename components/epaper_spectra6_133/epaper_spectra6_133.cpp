@@ -11,6 +11,8 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esphome/core/log.h"
 
 namespace esphome {
@@ -35,6 +37,10 @@ static constexpr int64_t ASYNC_POST_FULL_DELAY_US = 10LL * 1000LL;  // 10 ms
 
 // Post-refresh delay after a region transfer (microseconds).
 static constexpr int64_t ASYNC_POST_REGION_DELAY_US = 300LL * 1000LL;  // 300 ms
+
+// Full-frame online images draw 1.92M pixels synchronously through ESPHome's
+// DisplayBuffer path. Yield often enough that the ESP-IDF idle watchdog can run.
+static constexpr uint32_t DRAW_PIXELS_PER_YIELD = 4096;
 
 EpaperSpectra6133::EpaperSpectra6133() : controller_(this->transport_) {}
 
@@ -264,21 +270,30 @@ void HOT EpaperSpectra6133::draw_absolute_pixel_internal(int x, int y, Color col
   }
 
   write_pixel_to_buffer(this->buffer_, x, y, color_to_code(color));
+  if (++this->draw_pixels_since_yield_ >= DRAW_PIXELS_PER_YIELD) {
+    this->draw_pixels_since_yield_ = 0;
+    App.feed_wdt();
+    vTaskDelay(1);  // ensure at least one tick so lower-priority IDLE can execute
+  }
 
   // Expand the tracked change region to include this pixel.
-  if (this->tracked_region_.empty()) {
-    this->tracked_region_ = {x, y, 1, 1};
-  } else {
+  if (!this->tracked_region_.empty()) {
     const int rx = this->tracked_region_.x;
     const int ry = this->tracked_region_.y;
-    const int rr = rx + this->tracked_region_.width;
-    const int rb = ry + this->tracked_region_.height;
+    const int rw = this->tracked_region_.width;
+    const int rh = this->tracked_region_.height;
+    // Fast path: if the pixel is already inside the bounding box, do nothing
+    if (x >= rx && x < rx + rw && y >= ry && y < ry + rh) {
+      return;
+    }
     const int nx = x < rx ? x : rx;
     const int ny = y < ry ? y : ry;
     this->tracked_region_.x = nx;
     this->tracked_region_.y = ny;
-    this->tracked_region_.width = (x >= rr ? x + 1 : rr) - nx;
-    this->tracked_region_.height = (y >= rb ? y + 1 : rb) - ny;
+    this->tracked_region_.width = (x >= rx + rw ? x + 1 : rx + rw) - nx;
+    this->tracked_region_.height = (y >= ry + rh ? y + 1 : ry + rh) - ny;
+  } else {
+    this->tracked_region_ = {x, y, 1, 1};
   }
 }
 

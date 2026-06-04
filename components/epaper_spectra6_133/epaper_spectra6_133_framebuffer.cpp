@@ -18,7 +18,28 @@ namespace epaper_spectra6_133 {
  * The panel supports only six colours, so arbitrary RGB values are mapped by
  * nearest-distance matching in RGB space.
  */
-uint8_t color_to_code(Color color) {
+uint8_t color_to_code(const Color &color) {
+  const uint32_t rgb = (static_cast<uint32_t>(color.red) << 16) | (static_cast<uint32_t>(color.green) << 8) |
+                       static_cast<uint32_t>(color.blue);
+
+  // Fast path for exact Spectra 6 palette colors.
+  switch (rgb) {
+    case 0x00000000:
+      return COLOR_BLACK;
+    case 0x00FFFFFF:
+      return COLOR_WHITE;
+    case 0x00FFFF00:
+      return COLOR_YELLOW;
+    case 0x00FF0000:
+      return COLOR_RED;
+    case 0x0000FF00:
+      return COLOR_GREEN;
+    case 0x000000FF:
+      return COLOR_BLUE;
+    default:
+      break;
+  }
+
   struct PaletteEntry {
     uint8_t code;
     uint8_t red;
@@ -26,24 +47,21 @@ uint8_t color_to_code(Color color) {
     uint8_t blue;
   };
 
-  static constexpr std::array<PaletteEntry, 6> palette = {{
-      {COLOR_BLACK, 0, 0, 0},
-      {COLOR_WHITE, 255, 255, 255},
-      {COLOR_YELLOW, 255, 255, 0},
-      {COLOR_RED, 255, 0, 0},
-      {COLOR_BLUE, 0, 0, 255},
-      {COLOR_GREEN, 0, 255, 0},
-  }};
+  static constexpr PaletteEntry palette[] = {
+      {COLOR_BLACK, 0, 0, 0}, {COLOR_WHITE, 255, 255, 255}, {COLOR_YELLOW, 255, 255, 0},
+      {COLOR_RED, 255, 0, 0}, {COLOR_BLUE, 0, 0, 255},      {COLOR_GREEN, 0, 255, 0},
+  };
+
+  auto squared_delta = [](uint8_t lhs, uint8_t rhs) -> uint32_t {
+    const int delta = static_cast<int>(lhs) - static_cast<int>(rhs);
+    return static_cast<uint32_t>(delta * delta);
+  };
 
   uint8_t best_code = COLOR_BLACK;
   uint32_t best_distance = UINT32_MAX;
-
   for (const auto &entry : palette) {
-    const int red_delta = static_cast<int>(color.red) - static_cast<int>(entry.red);
-    const int green_delta = static_cast<int>(color.green) - static_cast<int>(entry.green);
-    const int blue_delta = static_cast<int>(color.blue) - static_cast<int>(entry.blue);
-    const uint32_t distance =
-        static_cast<uint32_t>(red_delta * red_delta + green_delta * green_delta + blue_delta * blue_delta);
+    const uint32_t distance = squared_delta(color.red, entry.red) + squared_delta(color.green, entry.green) +
+                              squared_delta(color.blue, entry.blue);
     if (distance < best_distance) {
       best_distance = distance;
       best_code = entry.code;
@@ -52,7 +70,6 @@ uint8_t color_to_code(Color color) {
 
   return best_code;
 }
-
 /**
  * @brief Writes one logical pixel into the nibble-packed framebuffer.
  *

@@ -18,7 +18,7 @@ namespace epaper_spectra6_133 {
  * The mapping is heuristic because the physical panel only supports six
  * fixed colours rather than arbitrary RGB output.
  */
-uint8_t color_to_code(Color color);
+uint8_t color_to_code(const Color &color);
 /**
  * @brief Writes one logical pixel into the nibble-packed framebuffer.
  *
