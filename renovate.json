@@ -1,0 +1,41 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    ":enablePreCommit"
+  ],
+  "timezone": "Europe/Berlin",
+  "schedule": [
+    "after 6:00am and before 7:00am on monday"
+  ],
+  "dependencyDashboardOSVVulnerabilitySummary": "unresolved",
+  "osvVulnerabilityAlerts": true,
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "prConcurrentLimit": 5,
+  "packageRules": [
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "github-actions",
+      "groupSlug": "github-actions"
+    },
+    {
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "groupName": "python-dependencies",
+      "groupSlug": "python-dependencies",
+      "rangeStrategy": "bump"
+    },
+    {
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "groupName": "pre-commit-hooks",
+      "groupSlug": "pre-commit-hooks"
+    }
+  ]
+}
