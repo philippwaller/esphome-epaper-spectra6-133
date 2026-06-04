@@ -10,19 +10,23 @@
   ],
   "dependencyDashboardOSVVulnerabilitySummary": "unresolved",
   "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "rangeStrategy": "in-range-only"
+  },
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
   "semanticCommitScope": "deps",
   "prConcurrentLimit": 5,
   "packageRules": [
     {
+      "description": "Preserve the supported runtime dependency ranges validated by the ESPHome compatibility matrix",
       "matchManagers": [
         "pip_requirements"
       ],
-      "matchPackageNames": [
-        "esphome"
+      "matchFileNames": [
+        "requirements.txt"
       ],
-      "enabled": false
+      "rangeStrategy": "in-range-only"
     },
     {
       "matchManagers": [
@@ -34,6 +38,9 @@
     {
       "matchManagers": [
         "pip_requirements"
+      ],
+      "matchFileNames": [
+        "requirements-dev.txt"
       ],
       "groupName": "python-dependencies",
       "groupSlug": "python-dependencies",
