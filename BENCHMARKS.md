@@ -116,8 +116,7 @@ build/bencher-local/
 
 The `Host C++ Benchmarks` job in `.github/workflows/ci.yml` runs the benchmark
 script for relevant C++ or CI changes on trusted non-PR events, uploads
-`build/benchmarks/results.json` as a workflow artifact, and tracks `main`
-history in Bencher.
+`build/benchmarks/results.json` as a workflow artifact, and tracks history in Bencher.
 
 Pull requests use the two-workflow pattern recommended by Bencher for fork
 support:

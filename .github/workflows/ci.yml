@@ -135,6 +135,7 @@ jobs:
       checks: write
     env:
       BENCHMARK_RESULTS: build/benchmarks/results.json
+      BENCHER_BRANCH: ${{ github.ref_name }}
       BENCHER_PROJECT: ${{ vars.BENCHER_PROJECT }}
       BENCHER_API_KEY: ${{ secrets.BENCHER_API_KEY }}
     steps:
@@ -149,15 +150,23 @@ jobs:
           path: ${{ env.BENCHMARK_RESULTS }}
           if-no-files-found: error
       - name: Install Bencher CLI
-        if: github.event_name == 'push' && env.BENCHER_PROJECT != '' && env.BENCHER_API_KEY != ''
+        if: >-
+          (github.event_name == 'push' ||
+           github.event_name == 'workflow_dispatch') &&
+          env.BENCHER_PROJECT != '' &&
+          env.BENCHER_API_KEY != ''
         uses: bencherdev/bencher@main
-      - name: Track main benchmarks with Bencher
-        if: github.event_name == 'push' && env.BENCHER_PROJECT != '' && env.BENCHER_API_KEY != ''
+      - name: Track benchmarks with Bencher
+        if: >-
+          (github.event_name == 'push' ||
+           github.event_name == 'workflow_dispatch') &&
+          env.BENCHER_PROJECT != '' &&
+          env.BENCHER_API_KEY != ''
         run: |
           bencher run \
             --project "$BENCHER_PROJECT" \
             --key "$BENCHER_API_KEY" \
-            --branch main \
+            --branch "$BENCHER_BRANCH" \
             --hash '${{ github.sha }}' \
             --testbed ubuntu-latest \
             --threshold-measure latency \
