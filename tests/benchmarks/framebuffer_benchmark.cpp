@@ -52,6 +52,76 @@ std::vector<Color> make_mixed_pixels(int width, int height) {
 }
 
 /**
+ * Builds deterministic pixels using only the six exact panel palette colors.
+ *
+ * This models images pre-quantized for Spectra 6 before ESPHome stores and
+ * draws them as RGB565.
+ */
+std::vector<Color> make_uniform_palette_pixels(int width, int height) {
+  static constexpr std::array<Color, 6> palette = {
+      Color(0, 0, 0), Color(255, 255, 255), Color(255, 255, 0),
+      Color(255, 0, 0), Color(0, 0, 255),   Color(0, 255, 0),
+  };
+  std::vector<Color> pixels;
+  pixels.reserve(static_cast<size_t>(width) * static_cast<size_t>(height));
+
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      pixels.push_back(palette[static_cast<size_t>(x + y) % palette.size()]);
+    }
+  }
+
+  return pixels;
+}
+
+/**
+ * Builds a deterministic palette workload representative of the example image.
+ *
+ * Every 100 pixels contain 46 black, 20 white, 11 red, 11 green, 11 blue, and
+ * one yellow pixel.
+ */
+std::vector<Color> make_representative_palette_pixels(int width, int height) {
+  static constexpr Color black(0, 0, 0);
+  static constexpr Color white(255, 255, 255);
+  static constexpr Color red(255, 0, 0);
+  static constexpr Color green(0, 255, 0);
+  static constexpr Color blue(0, 0, 255);
+  static constexpr Color yellow(255, 255, 0);
+  std::vector<Color> pixels;
+  pixels.reserve(static_cast<size_t>(width) * static_cast<size_t>(height));
+
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      // Coprime multipliers spread the fixed distribution across both axes so
+      // neither row-major nor column-major traversal sees artificial color runs.
+      const size_t cycle_index = (static_cast<size_t>(x) * 37U + static_cast<size_t>(y) * 53U) % 100U;
+      if (cycle_index < 46U) {
+        pixels.push_back(black);
+      } else if (cycle_index < 66U) {
+        pixels.push_back(white);
+      } else if (cycle_index < 77U) {
+        pixels.push_back(red);
+      } else if (cycle_index < 88U) {
+        pixels.push_back(green);
+      } else if (cycle_index < 99U) {
+        pixels.push_back(blue);
+      } else {
+        pixels.push_back(yellow);
+      }
+    }
+  }
+
+  return pixels;
+}
+
+using PixelFactory = std::vector<Color> (*)(int width, int height);
+
+enum class DrawOrder {
+  ROW_MAJOR,
+  COLUMN_MAJOR,
+};
+
+/**
  * Writes a clipped rectangle into a packed framebuffer using production pixel packing.
  *
  * Changed-region benchmarks use this helper so their inputs match the byte
@@ -102,8 +172,8 @@ class BenchmarkDisplay : public EpaperSpectra6133 {
  * This isolates color classification cost for image-heavy screens before
  * pixel packing or dirty-region tracking are considered.
  */
-void BM_ColorMapping_MixedPixels(benchmark::State &state) {
-  const auto pixels = make_mixed_pixels(static_cast<int>(state.range(0)), static_cast<int>(state.range(1)));
+void BM_ColorMapping(benchmark::State &state, PixelFactory make_pixels) {
+  const auto pixels = make_pixels(static_cast<int>(state.range(0)), static_cast<int>(state.range(1)));
   uint32_t checksum = 0;
 
   for (auto _ : state) {
@@ -117,10 +187,18 @@ void BM_ColorMapping_MixedPixels(benchmark::State &state) {
   state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(pixels.size() * 3U));
 }
 
-BENCHMARK(BM_ColorMapping_MixedPixels)
-    ->Name("ColorMapping/MixedPixels")
+BENCHMARK_CAPTURE(BM_ColorMapping, mixed_rgb, make_mixed_pixels)
+    ->Name("ColorMapping/MixedRGB")
     ->Args({64, 64})
     ->Args({480, 320})
+    ->Args({EPD_WIDTH, EPD_HEIGHT});
+BENCHMARK_CAPTURE(BM_ColorMapping, uniform_palette, make_uniform_palette_pixels)
+    ->Name("ColorMapping/UniformPalette")
+    ->Args({64, 64})
+    ->Args({480, 320})
+    ->Args({EPD_WIDTH, EPD_HEIGHT});
+BENCHMARK_CAPTURE(BM_ColorMapping, representative_palette, make_representative_palette_pixels)
+    ->Name("ColorMapping/RepresentativePalette")
     ->Args({EPD_WIDTH, EPD_HEIGHT});
 
 /**
@@ -129,7 +207,7 @@ BENCHMARK(BM_ColorMapping_MixedPixels)
  * This models simple UI and layout drawing where colors are known up front and
  * no RGB palette search is needed.
  */
-void BM_FramebufferGeneration_WritePixels(benchmark::State &state) {
+void BM_FramebufferPacking_PaletteCodes(benchmark::State &state) {
   const int width = static_cast<int>(state.range(0));
   const int height = static_cast<int>(state.range(1));
   std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
@@ -153,66 +231,45 @@ void BM_FramebufferGeneration_WritePixels(benchmark::State &state) {
   state.SetBytesProcessed(state.iterations() * static_cast<int64_t>((width * height + 1) / 2));
 }
 
-BENCHMARK(BM_FramebufferGeneration_WritePixels)
-    ->Name("FramebufferGeneration/WritePixelRegion")
+BENCHMARK(BM_FramebufferPacking_PaletteCodes)
+    ->Name("FramebufferPacking/PaletteCodes")
     ->Args({64, 64})
     ->Args({480, 320})
     ->Args({EPD_WIDTH, EPD_HEIGHT});
 
 /**
- * Benchmarks image preparation from RGB pixels into the packed framebuffer.
+ * Benchmarks the complete production draw hook with configurable pixels and order.
  *
- * Each iteration maps deterministic RGB input to the fixed Spectra 6 palette
- * and immediately writes the resulting panel code into the framebuffer.
+ * Row-major order models general primitives. Column-major order matches
+ * ESPHome's Image::draw implementation. Contained overdraw pre-seeds the dirty
+ * region so every timed pixel lies inside an already tracked bounding box.
  */
-void BM_FramebufferGeneration_ImageToFramebuffer(benchmark::State &state) {
+void BM_DrawPipeline(benchmark::State &state, PixelFactory make_pixels, DrawOrder order, bool contained_overdraw) {
   const int width = static_cast<int>(state.range(0));
   const int height = static_cast<int>(state.range(1));
-  const auto pixels = make_mixed_pixels(width, height);
-  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
-
-  for (auto _ : state) {
-    size_t pixel_index = 0;
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
-        write_pixel_to_buffer(buffer.data(), x, y, color_to_code(pixels[pixel_index]));
-        pixel_index++;
-      }
-    }
-    benchmark::DoNotOptimize(buffer.data());
-    benchmark::ClobberMemory();
-  }
-
-  state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(pixels.size()));
-  state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(pixels.size() * 3U));
-}
-
-BENCHMARK(BM_FramebufferGeneration_ImageToFramebuffer)
-    ->Name("FramebufferGeneration/ImageToFramebuffer")
-    ->Args({64, 64})
-    ->Args({480, 320})
-    ->Args({EPD_WIDTH, EPD_HEIGHT});
-
-/**
- * Benchmarks the display draw hook used by tracked partial updates.
- *
- * Compared with the raw image-to-framebuffer benchmark, this path also includes
- * DisplayBuffer dispatch and the tracked changed-region accumulator.
- */
-void BM_DisplayDrawPipeline_TrackedPixels(benchmark::State &state) {
-  const int width = static_cast<int>(state.range(0));
-  const int height = static_cast<int>(state.range(1));
-  const auto pixels = make_mixed_pixels(width, height);
+  const auto pixels = make_pixels(width, height);
   BenchmarkDisplay display;
 
   for (auto _ : state) {
     display.reset_change_tracking();
+    if (contained_overdraw) {
+      state.PauseTiming();
+      display.draw_pixel(0, 0, pixels.front());
+      display.draw_pixel(width - 1, height - 1, pixels.back());
+      state.ResumeTiming();
+    }
 
-    size_t pixel_index = 0;
-    for (int y = 0; y < height; y++) {
+    if (order == DrawOrder::ROW_MAJOR) {
+      for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+          display.draw_pixel(x, y, pixels[static_cast<size_t>(y) * width + x]);
+        }
+      }
+    } else {
       for (int x = 0; x < width; x++) {
-        display.draw_pixel(x, y, pixels[pixel_index]);
-        pixel_index++;
+        for (int y = 0; y < height; y++) {
+          display.draw_pixel(x, y, pixels[static_cast<size_t>(y) * width + x]);
+        }
       }
     }
 
@@ -226,10 +283,26 @@ void BM_DisplayDrawPipeline_TrackedPixels(benchmark::State &state) {
   state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(pixels.size() * 3U));
 }
 
-BENCHMARK(BM_DisplayDrawPipeline_TrackedPixels)
-    ->Name("DisplayPreparation/TrackedDrawPixels")
+BENCHMARK_CAPTURE(BM_DrawPipeline, primitive_row_major_mixed_rgb, make_mixed_pixels, DrawOrder::ROW_MAJOR, false)
+    ->Name("DrawPipeline/PrimitiveRowMajor/MixedRGB")
     ->Args({64, 64})
     ->Args({480, 320})
+    ->Args({EPD_WIDTH, EPD_HEIGHT});
+BENCHMARK_CAPTURE(BM_DrawPipeline, image_column_major_uniform_palette, make_uniform_palette_pixels,
+                  DrawOrder::COLUMN_MAJOR, false)
+    ->Name("DrawPipeline/ImageColumnMajor/UniformPalette")
+    ->Args({64, 64})
+    ->Args({480, 320})
+    ->Args({EPD_WIDTH, EPD_HEIGHT});
+BENCHMARK_CAPTURE(BM_DrawPipeline, image_column_major_mixed_rgb, make_mixed_pixels, DrawOrder::COLUMN_MAJOR, false)
+    ->Name("DrawPipeline/ImageColumnMajor/MixedRGB")
+    ->Args({EPD_WIDTH, EPD_HEIGHT});
+BENCHMARK_CAPTURE(BM_DrawPipeline, image_column_major_representative_palette, make_representative_palette_pixels,
+                  DrawOrder::COLUMN_MAJOR, false)
+    ->Name("DrawPipeline/ImageColumnMajor/RepresentativePalette")
+    ->Args({EPD_WIDTH, EPD_HEIGHT});
+BENCHMARK_CAPTURE(BM_DrawPipeline, contained_overdraw_mixed_rgb, make_mixed_pixels, DrawOrder::ROW_MAJOR, true)
+    ->Name("DrawPipeline/ContainedOverdraw/MixedRGB")
     ->Args({EPD_WIDTH, EPD_HEIGHT});
 
 /**
@@ -252,12 +325,12 @@ void BM_FramebufferFill(benchmark::State &state, uint8_t color_code) {
   state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(FULL_FRAME_SIZE));
 }
 
-BENCHMARK_CAPTURE(BM_FramebufferFill, black, COLOR_BLACK)->Name("FramebufferGeneration/FillFullFrame/black");
-BENCHMARK_CAPTURE(BM_FramebufferFill, white, COLOR_WHITE)->Name("FramebufferGeneration/FillFullFrame/white");
-BENCHMARK_CAPTURE(BM_FramebufferFill, yellow, COLOR_YELLOW)->Name("FramebufferGeneration/FillFullFrame/yellow");
-BENCHMARK_CAPTURE(BM_FramebufferFill, red, COLOR_RED)->Name("FramebufferGeneration/FillFullFrame/red");
-BENCHMARK_CAPTURE(BM_FramebufferFill, blue, COLOR_BLUE)->Name("FramebufferGeneration/FillFullFrame/blue");
-BENCHMARK_CAPTURE(BM_FramebufferFill, green, COLOR_GREEN)->Name("FramebufferGeneration/FillFullFrame/green");
+BENCHMARK_CAPTURE(BM_FramebufferFill, black, COLOR_BLACK)->Name("FramebufferFill/black");
+BENCHMARK_CAPTURE(BM_FramebufferFill, white, COLOR_WHITE)->Name("FramebufferFill/white");
+BENCHMARK_CAPTURE(BM_FramebufferFill, yellow, COLOR_YELLOW)->Name("FramebufferFill/yellow");
+BENCHMARK_CAPTURE(BM_FramebufferFill, red, COLOR_RED)->Name("FramebufferFill/red");
+BENCHMARK_CAPTURE(BM_FramebufferFill, blue, COLOR_BLUE)->Name("FramebufferFill/blue");
+BENCHMARK_CAPTURE(BM_FramebufferFill, green, COLOR_GREEN)->Name("FramebufferFill/green");
 
 /**
  * Benchmarks generation of the vendor-style color-bar test pattern.
@@ -277,7 +350,7 @@ void BM_DisplayPattern_ColorBar(benchmark::State &state) {
   state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(FULL_FRAME_SIZE));
 }
 
-BENCHMARK(BM_DisplayPattern_ColorBar)->Name("DisplayPreparation/ColorBarPattern");
+BENCHMARK(BM_DisplayPattern_ColorBar)->Name("FramebufferPatterns/ColorBar");
 
 /**
  * Benchmarks generation of the tiled checkerboard panel test pattern.
@@ -297,7 +370,7 @@ void BM_DisplayPattern_Checkerboard(benchmark::State &state) {
   state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(FULL_FRAME_SIZE));
 }
 
-BENCHMARK(BM_DisplayPattern_Checkerboard)->Name("DisplayPreparation/CheckerboardPattern");
+BENCHMARK(BM_DisplayPattern_Checkerboard)->Name("FramebufferPatterns/Checkerboard");
 
 /**
  * Benchmarks changed-region detection when current and previous frames match.
@@ -436,15 +509,15 @@ void BM_PartialRegion_Computation(benchmark::State &state, RegionCase input) {
 }
 
 BENCHMARK_CAPTURE(BM_PartialRegion_Computation, small_single_half, RegionCase{32, 48, 96, 176})
-    ->Name("DisplayPreparation/PartialRegion/small_single_half");
+    ->Name("PartialRegionComputation/small_single_half");
 BENCHMARK_CAPTURE(BM_PartialRegion_Computation, medium_dashboard_card, RegionCase{280, 460, 520, 320})
-    ->Name("DisplayPreparation/PartialRegion/medium_dashboard_card");
+    ->Name("PartialRegionComputation/medium_dashboard_card");
 BENCHMARK_CAPTURE(BM_PartialRegion_Computation, split_boundary, RegionCase{560, 100, 160, 180})
-    ->Name("DisplayPreparation/PartialRegion/split_boundary");
+    ->Name("PartialRegionComputation/split_boundary");
 BENCHMARK_CAPTURE(BM_PartialRegion_Computation, clipped_edge, RegionCase{1140, 1500, 220, 220})
-    ->Name("DisplayPreparation/PartialRegion/clipped_edge");
+    ->Name("PartialRegionComputation/clipped_edge");
 BENCHMARK_CAPTURE(BM_PartialRegion_Computation, full_frame, RegionCase{0, 0, EPD_WIDTH, EPD_HEIGHT})
-    ->Name("DisplayPreparation/PartialRegion/full_frame");
+    ->Name("PartialRegionComputation/full_frame");
 
 }  // namespace
 }  // namespace epaper_spectra6_133
