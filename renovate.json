@@ -30,28 +30,12 @@
     },
     {
       "matchManagers": [
-        "github-actions"
-      ],
-      "groupName": "github-actions",
-      "groupSlug": "github-actions"
-    },
-    {
-      "matchManagers": [
         "pip_requirements"
       ],
       "matchFileNames": [
         "requirements-dev.txt"
       ],
-      "groupName": "python-dependencies",
-      "groupSlug": "python-dependencies",
       "rangeStrategy": "bump"
-    },
-    {
-      "matchManagers": [
-        "pre-commit"
-      ],
-      "groupName": "pre-commit-hooks",
-      "groupSlug": "pre-commit-hooks"
     }
   ]
 }
