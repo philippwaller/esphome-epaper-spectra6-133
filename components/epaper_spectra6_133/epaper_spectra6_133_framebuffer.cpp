@@ -70,30 +70,6 @@ uint8_t color_to_code(const Color &color) {
 
   return best_code;
 }
-/**
- * @brief Writes one logical pixel into the nibble-packed framebuffer.
- *
- * Two pixels are packed per byte: even x in the high nibble, odd x in the
- * low nibble.  The byte order within each row is left-to-right so that
- * bytes [0..299] correspond to CS0 and [300..599] to CS1.
- *
- * The framebuffer is written left-to-right. Controller scan direction is set
- * during panel initialization and must match this logical layout.
- */
-void write_pixel_to_buffer(uint8_t *buffer, int x, int y, uint8_t color_code) {
-  if (buffer == nullptr) {
-    return;
-  }
-
-  // Even logical x values occupy the high nibble; odd values the low nibble.
-  const size_t byte_index = static_cast<size_t>(y) * ROW_BYTES + static_cast<size_t>(x / 2);
-  if ((x & 1) == 0) {
-    buffer[byte_index] = static_cast<uint8_t>((buffer[byte_index] & 0x0F) | (color_code << 4));
-  } else {
-    buffer[byte_index] = static_cast<uint8_t>((buffer[byte_index] & 0xF0) | (color_code & 0x0F));
-  }
-}
-
 /** @brief Fills every pixel in the framebuffer with the same packed panel colour. */
 void fill_buffer_with_code(uint8_t *buffer, uint8_t color_code) {
   if (buffer == nullptr) {

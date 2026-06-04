@@ -519,6 +519,111 @@ BENCHMARK_CAPTURE(BM_PartialRegion_Computation, clipped_edge, RegionCase{1140, 1
 BENCHMARK_CAPTURE(BM_PartialRegion_Computation, full_frame, RegionCase{0, 0, EPD_WIDTH, EPD_HEIGHT})
     ->Name("PartialRegionComputation/full_frame");
 
+/**
+ * Benchmarks the full draw pipeline using pre-quantized palette codes in row-major order.
+ *
+ * This models a hypothetical draw_palette_image() bulk API: pixels are already
+ * expressed as panel codes and written row by row, avoiding color mapping and
+ * producing cache-friendly sequential framebuffer writes.
+ *
+ * Compare this against DrawPipeline/ImageColumnMajor/UniformPalette/1200/1600
+ * to quantify the combined benefit of eliminating color_to_code and switching
+ * from column-major to row-major traversal. A >2× improvement justifies
+ * implementing the bulk API.
+ */
+void BM_DrawPipeline_PaletteCodes_RowMajor(benchmark::State &state) {
+  const int width = EPD_WIDTH;
+  const int height = EPD_HEIGHT;
+  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, packed_fill_byte(COLOR_WHITE));
+
+  for (auto _ : state) {
+    size_t palette_index = 0;
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        write_pixel_to_buffer(buffer.data(), x, y, kPanelCodes[palette_index]);
+        palette_index++;
+        if (palette_index == kPanelCodes.size()) {
+          palette_index = 0;
+        }
+      }
+    }
+    benchmark::DoNotOptimize(buffer.data());
+    benchmark::ClobberMemory();
+  }
+
+  state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(width) * height);
+  state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(FULL_FRAME_SIZE));
+}
+
+BENCHMARK(BM_DrawPipeline_PaletteCodes_RowMajor)->Name("DrawPipeline/PaletteCodes/RowMajor/1200/1600");
+
+/**
+ * Benchmarks write_pixel_to_buffer in isolation with a single constant color.
+ *
+ * Row-major traversal matches cache-friendly access order. This benchmark
+ * isolates nibble-packing cost from color mapping and dirty-region tracking
+ * so changes to write_pixel_to_buffer show up cleanly on CodSpeed.
+ */
+void BM_WritePixelToBuffer_RowMajor(benchmark::State &state) {
+  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, 0);
+
+  for (auto _ : state) {
+    for (int y = 0; y < EPD_HEIGHT; y++) {
+      for (int x = 0; x < EPD_WIDTH; x++) {
+        write_pixel_to_buffer(buffer.data(), x, y, COLOR_BLACK);
+      }
+    }
+    benchmark::DoNotOptimize(buffer.data());
+    benchmark::ClobberMemory();
+  }
+
+  state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(EPD_WIDTH) * EPD_HEIGHT);
+  state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(FULL_FRAME_SIZE));
+}
+
+BENCHMARK(BM_WritePixelToBuffer_RowMajor)->Name("WritePixelToBuffer/SingleColor/RowMajor/1200/1600");
+
+/**
+ * Benchmarks write_pixel_to_buffer with column-major traversal.
+ *
+ * Column-major order (x outer, y inner) matches ESPHome's Image::draw call
+ * pattern and strides 600 bytes per step in the 960 KB framebuffer, causing
+ * L1/L2 cache misses. The gap between this and RowMajor quantifies the
+ * cache-miss penalty and motivates a future bulk row-oriented draw API.
+ */
+void BM_WritePixelToBuffer_ColumnMajor(benchmark::State &state) {
+  std::vector<uint8_t> buffer(FULL_FRAME_SIZE, 0);
+
+  for (auto _ : state) {
+    for (int x = 0; x < EPD_WIDTH; x++) {
+      for (int y = 0; y < EPD_HEIGHT; y++) {
+        write_pixel_to_buffer(buffer.data(), x, y, COLOR_BLACK);
+      }
+    }
+    benchmark::DoNotOptimize(buffer.data());
+    benchmark::ClobberMemory();
+  }
+
+  state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(EPD_WIDTH) * EPD_HEIGHT);
+  state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(FULL_FRAME_SIZE));
+}
+
+BENCHMARK(BM_WritePixelToBuffer_ColumnMajor)->Name("WritePixelToBuffer/SingleColor/ColumnMajor/1200/1600");
+
+/**
+ * Benchmarks the full draw pipeline with a representative palette and row-major order.
+ *
+ * Complements DrawPipeline/ImageColumnMajor/RepresentativePalette with a
+ * row-major variant so the cache-miss cost of ESPHome's column-major
+ * Image::draw can be separated from color-mapping and packing costs.
+ * The pixel distribution (46% black, 20% white, ~11% each of R/G/B, 1% yellow)
+ * matches a typical Home Assistant dashboard screenshot.
+ */
+BENCHMARK_CAPTURE(BM_DrawPipeline, primitive_row_major_representative_palette,
+                  make_representative_palette_pixels, DrawOrder::ROW_MAJOR, false)
+    ->Name("DrawPipeline/PrimitiveRowMajor/RepresentativePalette")
+    ->Args({EPD_WIDTH, EPD_HEIGHT});
+
 }  // namespace
 }  // namespace epaper_spectra6_133
 }  // namespace esphome
