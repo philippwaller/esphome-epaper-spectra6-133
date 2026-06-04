@@ -17,6 +17,15 @@
   "packageRules": [
     {
       "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchPackageNames": [
+        "esphome"
+      ],
+      "enabled": false
+    },
+    {
+      "matchManagers": [
         "github-actions"
       ],
       "groupName": "github-actions",
