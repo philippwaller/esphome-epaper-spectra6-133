@@ -276,7 +276,8 @@ void HOT EpaperSpectra6133::draw_absolute_pixel_internal(int x, int y, Color col
     taskYIELD();
   }
 
-  if (this->change_detection_mode_ == ChangeDetectionMode::TRACK) {
+  if (this->change_detection_mode_ == ChangeDetectionMode::TRACK ||
+      (this->change_detection_mode_ == ChangeDetectionMode::COMPARE && this->previous_frame_buffer_ == nullptr)) {
     if (!this->tracked_region_.empty()) {
       const int rx = this->tracked_region_.x;
       const int ry = this->tracked_region_.y;
