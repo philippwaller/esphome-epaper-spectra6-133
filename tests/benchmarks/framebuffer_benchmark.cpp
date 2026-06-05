@@ -587,7 +587,7 @@ void BM_WritePixelToBuffer_RowMajor(benchmark::State &state) {
   state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(FULL_FRAME_SIZE));
 }
 
-BENCHMARK(BM_WritePixelToBuffer_RowMajor)->Name("WritePixelToBuffer/SingleColor/RowMajor/1200/1600");
+BENCHMARK(BM_WritePixelToBuffer_RowMajor)->Name("WritePixelToBuffer/PaletteCycling/RowMajor/1200/1600");
 
 /**
  * Benchmarks write_pixel_to_buffer with cycling palette codes in column-major
@@ -620,7 +620,7 @@ void BM_WritePixelToBuffer_ColumnMajor(benchmark::State &state) {
   state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(FULL_FRAME_SIZE));
 }
 
-BENCHMARK(BM_WritePixelToBuffer_ColumnMajor)->Name("WritePixelToBuffer/SingleColor/ColumnMajor/1200/1600");
+BENCHMARK(BM_WritePixelToBuffer_ColumnMajor)->Name("WritePixelToBuffer/PaletteCycling/ColumnMajor/1200/1600");
 
 /**
  * Benchmarks the full draw pipeline with a representative palette and row-major order.
