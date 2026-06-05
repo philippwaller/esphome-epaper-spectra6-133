@@ -16,6 +16,7 @@
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
   "semanticCommitScope": "deps",
+  "dependencyDashboardAutoclose": true,
   "prConcurrentLimit": 5,
   "packageRules": [
     {
