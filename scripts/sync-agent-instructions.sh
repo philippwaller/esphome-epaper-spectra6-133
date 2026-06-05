@@ -9,7 +9,7 @@ gemini_file="${repo_root}/GEMINI.md"
 mode="${1:-write}"
 
 if [[ "${mode}" != "write" && "${mode}" != "--check" ]]; then
-  echo "usage: $0 [--check]" >&2
+  echo "usage: $0 [write|--check]" >&2
   exit 2
 fi
 
