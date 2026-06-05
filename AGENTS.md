@@ -1,9 +1,3 @@
----
-applyTo: "**"
----
-
-<!-- Generated from AGENTS.md. Run scripts/sync-agent-instructions.sh after editing AGENTS.md. -->
-
 # ESPHome epaper_spectra6_133 — Agent Instructions
 
 ## What this repository is

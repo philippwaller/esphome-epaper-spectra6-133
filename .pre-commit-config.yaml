@@ -51,6 +51,12 @@ repos:
         files: ^(CONTRIBUTING\.md|SECURITY\.md)$
   - repo: local
     hooks:
+      - id: sync-agent-instructions
+        name: check generated agent instruction files
+        entry: bash ./scripts/sync-agent-instructions.sh --check
+        language: system
+        pass_filenames: false
+        files: ^(AGENTS\.md|CLAUDE\.md|GEMINI\.md|\.github/copilot-instructions\.md|scripts/sync-agent-instructions\.sh)$
       - id: check-documented-esphome-compatibility
         name: check documented ESPHome compatibility matches requirements.txt
         description: >-
