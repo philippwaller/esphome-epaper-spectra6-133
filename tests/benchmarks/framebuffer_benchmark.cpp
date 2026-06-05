@@ -558,19 +558,25 @@ void BM_DrawPipeline_PaletteCodes_RowMajor(benchmark::State &state) {
 BENCHMARK(BM_DrawPipeline_PaletteCodes_RowMajor)->Name("DrawPipeline/PaletteCodes/RowMajor/1200/1600");
 
 /**
- * Benchmarks write_pixel_to_buffer in isolation with a single constant color.
+ * Benchmarks write_pixel_to_buffer in isolation with cycling palette codes in
+ * row-major traversal order (cache-friendly: sequential byte writes).
  *
- * Row-major traversal matches cache-friendly access order. This benchmark
- * isolates nibble-packing cost from color mapping and dirty-region tracking
- * so changes to write_pixel_to_buffer show up cleanly on CodSpeed.
+ * Cycles through all six panel codes so the compiler cannot constant-fold the
+ * mask/shift logic.  Pair with the ColumnMajor variant to isolate the
+ * cache-miss penalty of ESPHome's Image::draw traversal order without color
+ * mapping or dirty-region tracking in the measurement.
  */
 void BM_WritePixelToBuffer_RowMajor(benchmark::State &state) {
   std::vector<uint8_t> buffer(FULL_FRAME_SIZE, 0);
 
   for (auto _ : state) {
+    size_t palette_index = 0;
     for (int y = 0; y < EPD_HEIGHT; y++) {
       for (int x = 0; x < EPD_WIDTH; x++) {
-        write_pixel_to_buffer(buffer.data(), x, y, COLOR_BLACK);
+        write_pixel_to_buffer(buffer.data(), x, y, kPanelCodes[palette_index]);
+        if (++palette_index == kPanelCodes.size()) {
+          palette_index = 0;
+        }
       }
     }
     benchmark::DoNotOptimize(buffer.data());
@@ -584,20 +590,26 @@ void BM_WritePixelToBuffer_RowMajor(benchmark::State &state) {
 BENCHMARK(BM_WritePixelToBuffer_RowMajor)->Name("WritePixelToBuffer/SingleColor/RowMajor/1200/1600");
 
 /**
- * Benchmarks write_pixel_to_buffer with column-major traversal.
+ * Benchmarks write_pixel_to_buffer with cycling palette codes in column-major
+ * traversal order (x outer, y inner).  This matches ESPHome's Image::draw call
+ * pattern and strides ROW_BYTES (600 bytes) per step in the 960 KB framebuffer.
  *
- * Column-major order (x outer, y inner) matches ESPHome's Image::draw call
- * pattern and strides 600 bytes per step in the 960 KB framebuffer, causing
- * L1/L2 cache misses. The gap between this and RowMajor quantifies the
- * cache-miss penalty and motivates a future bulk row-oriented draw API.
+ * Cycles through all six panel codes so the compiler cannot constant-fold the
+ * mask/shift logic.  The gap between this and the RowMajor variant isolates
+ * the L1/L2 cache-miss penalty of column-major traversal and motivates a
+ * future bulk row-oriented draw API.
  */
 void BM_WritePixelToBuffer_ColumnMajor(benchmark::State &state) {
   std::vector<uint8_t> buffer(FULL_FRAME_SIZE, 0);
 
   for (auto _ : state) {
+    size_t palette_index = 0;
     for (int x = 0; x < EPD_WIDTH; x++) {
       for (int y = 0; y < EPD_HEIGHT; y++) {
-        write_pixel_to_buffer(buffer.data(), x, y, COLOR_BLACK);
+        write_pixel_to_buffer(buffer.data(), x, y, kPanelCodes[palette_index]);
+        if (++palette_index == kPanelCodes.size()) {
+          palette_index = 0;
+        }
       }
     }
     benchmark::DoNotOptimize(buffer.data());

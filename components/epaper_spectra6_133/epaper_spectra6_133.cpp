@@ -273,27 +273,27 @@ void HOT EpaperSpectra6133::draw_absolute_pixel_internal(int x, int y, Color col
   if (++this->draw_pixels_since_yield_ >= DRAW_PIXELS_PER_YIELD) {
     this->draw_pixels_since_yield_ = 0;
     App.feed_wdt();
-    vTaskDelay(1);  // ensure at least one tick so lower-priority IDLE can execute
+    taskYIELD();
   }
 
-  // Expand the tracked change region to include this pixel.
-  if (!this->tracked_region_.empty()) {
-    const int rx = this->tracked_region_.x;
-    const int ry = this->tracked_region_.y;
-    const int rw = this->tracked_region_.width;
-    const int rh = this->tracked_region_.height;
-    // Fast path: if the pixel is already inside the bounding box, do nothing
-    if (x >= rx && x < rx + rw && y >= ry && y < ry + rh) {
-      return;
+  if (this->change_detection_mode_ == ChangeDetectionMode::TRACK) {
+    if (!this->tracked_region_.empty()) {
+      const int rx = this->tracked_region_.x;
+      const int ry = this->tracked_region_.y;
+      const int rw = this->tracked_region_.width;
+      const int rh = this->tracked_region_.height;
+      if (x >= rx && x < rx + rw && y >= ry && y < ry + rh) {
+        return;
+      }
+      const int nx = x < rx ? x : rx;
+      const int ny = y < ry ? y : ry;
+      this->tracked_region_.x = nx;
+      this->tracked_region_.y = ny;
+      this->tracked_region_.width = (x >= rx + rw ? x + 1 : rx + rw) - nx;
+      this->tracked_region_.height = (y >= ry + rh ? y + 1 : ry + rh) - ny;
+    } else {
+      this->tracked_region_ = {x, y, 1, 1};
     }
-    const int nx = x < rx ? x : rx;
-    const int ny = y < ry ? y : ry;
-    this->tracked_region_.x = nx;
-    this->tracked_region_.y = ny;
-    this->tracked_region_.width = (x >= rx + rw ? x + 1 : rx + rw) - nx;
-    this->tracked_region_.height = (y >= ry + rh ? y + 1 : ry + rh) - ny;
-  } else {
-    this->tracked_region_ = {x, y, 1, 1};
   }
 }
 
