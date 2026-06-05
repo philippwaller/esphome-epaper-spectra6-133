@@ -5,6 +5,9 @@
  * @brief Helpers for mapping logical drawing operations into the packed panel framebuffer.
  */
 
+#include <cstddef>
+#include <cstdint>
+
 #include "esphome/core/color.h"
 
 #include "epaper_spectra6_133_constants.h"
@@ -19,15 +22,25 @@ namespace epaper_spectra6_133 {
  * fixed colours rather than arbitrary RGB output.
  */
 uint8_t color_to_code(const Color &color);
+
 /**
  * @brief Writes one logical pixel into the nibble-packed framebuffer.
  *
- * @param buffer Target framebuffer.
+ * Two pixels share one byte: even x in the high nibble, odd x in the low nibble.
+ * Callers must ensure buffer != nullptr; all production call sites already do.
+ *
+ * @param buffer Target framebuffer (must not be null).
  * @param x Logical x coordinate.
  * @param y Logical y coordinate.
  * @param color_code 4-bit panel palette entry.
  */
-void write_pixel_to_buffer(uint8_t *buffer, int x, int y, uint8_t color_code);
+inline void write_pixel_to_buffer(uint8_t *buffer, int x, int y, uint8_t color_code) {
+  const size_t byte_index = static_cast<size_t>(y) * ROW_BYTES + static_cast<size_t>(x / 2);
+  // shift = 4 for even x (high nibble), 0 for odd x (low nibble) — no branch needed.
+  const int shift = (1 ^ (x & 1)) << 2;
+  const uint8_t mask = static_cast<uint8_t>(0x0F << shift);
+  buffer[byte_index] = static_cast<uint8_t>((buffer[byte_index] & ~mask) | ((color_code & 0x0F) << shift));
+}
 /** @brief Fills the whole packed framebuffer with one repeated palette entry. */
 void fill_buffer_with_code(uint8_t *buffer, uint8_t color_code);
 /** @brief Draws the vendor-style vertical colour bar test pattern into the framebuffer. */
