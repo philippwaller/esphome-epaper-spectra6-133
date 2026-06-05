@@ -65,6 +65,9 @@ uint8_t color_to_code(const Color &color) {
     if (distance < best_distance) {
       best_distance = distance;
       best_code = entry.code;
+      if (best_distance == 0) {
+        break;
+      }
     }
   }
 
