@@ -188,7 +188,6 @@ install_hook() {
 
 step "Install required Git hooks"
 install_hook "pre-commit hook"
-install_hook "pre-push hook" --hook-type pre-push
 
 cat <<'EOF'
 
