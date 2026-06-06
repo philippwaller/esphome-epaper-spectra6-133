@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🖼️ esphome-epaper-spectra6-133
+# 🖼 esphome-epaper-spectra6-133
 
 ### 13.3″ Spectra 6 E-Paper Display for ESPHome
 
@@ -15,7 +15,7 @@
 
 **Build dashboards, photoframes, and data displays on 13.3″ Spectra 6 e-paper panels with the ESPHome display model you already know.**
 
-[Quick Start](#quick-start) · [Supported Panels](#supported-panels) · [Board Packages](#using-board-packages) · [Reference](#reference) · [How to use this component](#how-to-use-this-component) · [Image Preparation](#3-prepare-images-before-displaying-them) · [Examples](#example-configurations)
+[Quick Start](#-quick-start) · [Supported Panels](#supported-panels) · [Board Packages](#-using-board-packages) · [Reference](#-reference) · [How to use this component](#-how-to-use-this-component) · [Image Preparation](#3-prepare-images-before-displaying-them) · [Examples](#-example-configurations)
 
 </div>
 
@@ -62,7 +62,7 @@ Panels marked 🔄 are expected to work, but have not been confirmed with hardwa
 |---|---|---|---|
 | [Goo Display ESP32-133C02](packages/boards/goo_display/esp32_133c02.yaml) | ESP32-S3 | 16 MB | Revision 1.0, 2.0 |
 
-See [Using Board Packages](#using-board-packages) for import instructions and copy-paste examples.
+See [Using Board Packages](#-using-board-packages) for import instructions and copy-paste examples.
 
 </details>
 
@@ -206,7 +206,7 @@ esphome run spectra6-hello.yaml
 
 After flashing, the display should render the `HELLO MAKER` screen once.
 
-## Using Board Packages
+## 📦 Using Board Packages
 
 Board packages are optional shortcuts for known ESP32/display boards. You can always configure the board, PSRAM, logger, and display pins manually, as shown in the Quick Start example. If your board is listed here, the package gives you those hardware defaults and pin variables without copying them into every device YAML.
 
@@ -214,7 +214,7 @@ Use a board package when you want ESPHome to import the board setup for you. The
 
 You still need [`external_components`](https://esphome.io/components/external_components/) to download the custom `epaper_spectra6_133` display component. The [`packages`](https://esphome.io/components/packages/) entry only adds the board configuration. Your own YAML still contains the device-specific parts such as `esphome:`, WiFi, API/OTA, fonts, images, and the display lambda.
 
-Add the custom component as shown in the [Quick Start](#quick-start) section. Then add the matching board package from the table below:
+Add the custom component as shown in the [Quick Start](#-quick-start) section. Then add the matching board package from the table below:
 
 <!-- x-release-please-start-version -->
 ```yaml
@@ -298,7 +298,7 @@ Use this local form only when the package file is present next to your ESPHome Y
 
 </details>
 
-## ⚙️ Reference
+## ⚙ Reference
 
 ### Configuration
 
@@ -424,7 +424,7 @@ display:
 The conversion step is especially useful for photos, gradients, screenshots, and anti-aliased graphics. For simple UI assets, icons, and logos, manually designing directly in the six supported colours can produce cleaner results than automatic quantization and dithering.
 
 > [!TIP]
-> Start with `--preset default` for general images, `--preset vivid` for stronger colour impact, `--preset graphics` for posters and UI artwork, and `--preset accurate` when colour fidelity and fine detail matter most. See [Image Conversion](#image-conversion) for all script options.
+> Start with `--preset default` for general images, `--preset vivid` for stronger colour impact, `--preset graphics` for posters and UI artwork, and `--preset accurate` when colour fidelity and fine detail matter most. See [Image Conversion](#-image-conversion) for all script options.
 
 ### 4. Enable partial updates for `update()`
 
@@ -633,7 +633,7 @@ This repository includes several ready-to-use configurations:
 
 ---
 
-## 🖼️ Image Conversion
+## 🖼 Image Conversion
 
 This repository includes `scripts/convert_image.py`, an optional CLI that converts a source image into a PNG that uses only the Spectra 6 panel palette: **black**, **white**, **yellow**, **red**, **blue**, and **green**.
 
@@ -735,6 +735,6 @@ Contributions are welcome. Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 <div align="center">
 
-**[⬆ Back to top](#esphome-epaper-spectra6-133)**
+**[⬆ Back to top](#-esphome-epaper-spectra6-133)**
 
 </div>
