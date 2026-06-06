@@ -39,8 +39,9 @@ static constexpr int64_t ASYNC_POST_FULL_DELAY_US = 10LL * 1000LL;  // 10 ms
 static constexpr int64_t ASYNC_POST_REGION_DELAY_US = 300LL * 1000LL;  // 300 ms
 
 // Full-frame online images draw 1.92M pixels synchronously through ESPHome's
-// DisplayBuffer path. Yield often enough that the ESP-IDF idle watchdog can run.
-static constexpr uint32_t DRAW_PIXELS_PER_YIELD = 4096;
+// DisplayBuffer path. Insert real scheduler delays so the ESP-IDF idle task
+// can run during long draws and the task watchdog does not reset the device.
+static constexpr uint32_t DRAW_PIXELS_PER_DELAY = 4096;
 
 EpaperSpectra6133::EpaperSpectra6133() : controller_(this->transport_) {}
 
@@ -270,10 +271,10 @@ void HOT EpaperSpectra6133::draw_absolute_pixel_internal(int x, int y, Color col
   }
 
   write_pixel_to_buffer(this->buffer_, x, y, color_to_code(color));
-  if (++this->draw_pixels_since_yield_ >= DRAW_PIXELS_PER_YIELD) {
+  if (++this->draw_pixels_since_yield_ >= DRAW_PIXELS_PER_DELAY) {
     this->draw_pixels_since_yield_ = 0;
     App.feed_wdt();
-    taskYIELD();
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 
   if (this->change_detection_mode_ == ChangeDetectionMode::TRACK ||
