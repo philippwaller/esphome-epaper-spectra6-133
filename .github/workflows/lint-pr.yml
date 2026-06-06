@@ -18,6 +18,7 @@ concurrency:
 jobs:
   main:
     name: Validate PR title
+    if: github.event.action != 'edited' || toJSON(github.event.changes.title) != 'null'
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
