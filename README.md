@@ -62,6 +62,8 @@ Panels marked 🔄 are expected to work, but have not been confirmed with hardwa
 |---|---|---|---|
 | [Goo Display ESP32-133C02](packages/boards/goo_display/esp32_133c02.yaml) | ESP32-S3 | 16 MB | Revision 1.0, 2.0 |
 
+See [Using Board Packages](#using-board-packages) for import instructions and copy-paste examples.
+
 </details>
 
 ---
