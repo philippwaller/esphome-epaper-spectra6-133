@@ -10,7 +10,7 @@ Thank you for your interest in contributing! 🙏
 <!-- x-esphome-version-specifier-start -->
 | Requirement | Details |
 | --- | --- |
-| **Python** | 3.x with `venv` support |
+| **Python** | Version from `.python-version`, with `venv` support |
 | **Git** | Required so setup can install the repository hooks |
 | **Shell** | Bash-compatible shell |
 | **Hardware** | ESP32-S3 with PSRAM (for on-device testing) |
@@ -35,9 +35,15 @@ cd epaper_spectra6_133
 ./scripts/setup.sh
 ```
 
-This creates or updates `.venv`, installs the supported ESPHome dependency and dev tooling,
+This creates or updates `.venv` with the Python version declared in
+`.python-version`, installs the supported ESPHome dependency and dev tooling,
 creates `configs/secrets.yaml` from the example when missing, and installs the
 required `pre-commit` and `pre-push` Git hooks.
+
+To move the whole project to another Python minor version, update
+`.python-version` and rerun `./scripts/setup.sh`. Local setup recreates `.venv`
+when the existing virtual environment uses a different Python version, and CI
+reads the same file through the shared GitHub Actions setup action.
 
 The generated secrets file contains placeholders for local validation only.
 Replace those values before flashing real hardware. Existing `configs/secrets.yaml`
@@ -254,13 +260,13 @@ Convert images to the panel's exact six-colour palette before flashing:
 
 ```bash
 # Guided mode
-python scripts/convert_image.py --guided
+./.venv/bin/python scripts/convert_image.py --guided
 
 # List available presets
-python scripts/convert_image.py --list-presets
+./.venv/bin/python scripts/convert_image.py --list-presets
 
 # One-shot conversion
-python scripts/convert_image.py \
+./.venv/bin/python scripts/convert_image.py \
   configs/images/your-photo.jpg \
   --preset default \
   --fit cover \
