@@ -40,7 +40,6 @@ A ESPHome display component for large-format 13.3″ Spectra 6 e-paper panels. I
 | What | Details |
 | ------ | --------- |
 | **ESPHome** | >= 2026.2.0 |
-| **Python tooling** | Version from `.python-version` for local helper scripts and CI |
 | **Board** | ESP32 with PSRAM |
 | **Display** | 13.3″ Spectra 6 panel |
 | **Framework** | ESP-IDF (Arduino is **not** supported) |
