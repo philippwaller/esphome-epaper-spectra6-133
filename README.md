@@ -214,12 +214,7 @@ Use a board package when you want ESPHome to import the board setup for you. The
 
 You still need [`external_components`](https://esphome.io/components/external_components/) to download the custom `epaper_spectra6_133` display component. The [`packages`](https://esphome.io/components/packages/) entry only adds the board configuration. Your own YAML still contains the device-specific parts such as `esphome:`, WiFi, API/OTA, fonts, images, and the display lambda.
 
-Add the custom component as shown in the Quick Start.
-
-<!-- x-release-please-start-version -->
-<!-- x-release-please-end -->
-
-Then add the matching board package from the table below:
+Add the custom component as shown in the [Quick Start](`#quick-start`) section. Then add the matching board package from the table below:
 
 <!-- x-release-please-start-version -->
 ```yaml
