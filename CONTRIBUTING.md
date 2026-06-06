@@ -38,7 +38,7 @@ cd epaper_spectra6_133
 This creates or updates `.venv` with the Python version declared in
 `.python-version`, installs the supported ESPHome dependency and dev tooling,
 creates `configs/secrets.yaml` from the example when missing, and installs the
-required `pre-commit` and `pre-push` Git hooks.
+required `pre-commit` Git hook.
 
 To move the whole project to another Python minor version, update
 `.python-version` and rerun `./scripts/setup.sh`. Local setup recreates `.venv`
@@ -67,10 +67,26 @@ The repository ships pre-commit hooks for:
 - **markdownlint-cli2** — Markdown lint with the repository's relaxed documentation rules
 - **clang-format** — C++ formatting (ESPHome style)
 
-The required `pre-push` hooks additionally run:
+The heavier validation hooks are intentionally manual. They stay in
+`.pre-commit-config.yaml` so contributors can run the same local checks without
+blocking every push:
 
-- `bash ./scripts/validate-configs.sh`
-- `bash ./scripts/run-host-tests.sh`
+- `test-esphome-versions` validates the ESPHome version helper
+- `validate-configs` validates standalone ESPHome configs
+- `run-host-tests` builds and runs the host-side C++ tests
+
+Run all manual validation hooks before opening a pull request when you want the
+full local check set:
+
+```bash
+./.venv/bin/pre-commit run --hook-stage manual --all-files
+```
+
+To run one heavy check directly, pass the hook id:
+
+```bash
+./.venv/bin/pre-commit run --hook-stage manual validate-configs --all-files
+```
 
 ---
 
@@ -137,7 +153,7 @@ Open the workspace and use the pre-configured tasks:
 
 | Task | Description |
 | --- | --- |
-| **Setup developer environment** | Prepare `.venv`, local secrets, and required Git hooks |
+| **Setup developer environment** | Prepare `.venv`, local secrets, and required Git hook |
 | **Validate example configs** | Run `esphomew config` across all standalone example YAMLs |
 | **Run host tests** | Execute the host-side C++ test suite and refresh coverage output |
 | **Run pre-commit hooks** | Run all configured hooks across all files |

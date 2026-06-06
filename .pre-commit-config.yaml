@@ -71,19 +71,37 @@ repos:
         entry: ./.venv/bin/python -m unittest discover -s tests -p test_*.py
         language: system
         pass_filenames: false
-        stages: [pre-push]
+        stages: [manual]
         files: ^(README\.md|CONTRIBUTING\.md|requirements\.txt|scripts/esphome-versions\.py|tests/test_esphome_versions\.py)$
       - id: validate-configs
         name: validate ESPHome configs
         entry: bash ./scripts/validate-configs.sh
         language: system
         pass_filenames: false
-        always_run: true
-        stages: [pre-push]
+        stages: [manual]
+        files: |
+          (?x)^(
+            \.python-version|
+            requirements(-dev)?\.txt|
+            components/epaper_spectra6_133/.*\.(py|c|cc|cpp|cxx|h|hh|hpp)|
+            configs/.*\.(yaml|yml)|
+            packages/.*\.(yaml|yml)|
+            configs/partitions/.*|
+            scripts/(esphomew|setup\.sh|validate-configs\.sh|compile-configs\.sh|esphome-versions\.py)
+          )$
       - id: run-host-tests
         name: run host-side tests
         entry: bash ./scripts/run-host-tests.sh
         language: system
         pass_filenames: false
-        always_run: true
-        stages: [pre-push]
+        stages: [manual]
+        files: |
+          (?x)^(
+            \.python-version|
+            \.clang-format|
+            requirements-dev\.txt|
+            components/epaper_spectra6_133/.*\.(c|cc|cpp|cxx|h|hh|hpp)|
+            tests/.*\.(c|cc|cpp|cxx|h|hh|hpp)|
+            tests/CMakeLists\.txt|
+            scripts/(setup\.sh|run-host-tests\.sh)
+          )$
