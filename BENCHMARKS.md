@@ -73,9 +73,20 @@ bash ./scripts/run-benchmarks.sh -- --benchmark_repetitions=3
 ## CI and CodSpeed
 
 The `CodSpeed` workflow in `.github/workflows/codspeed.yml` builds and runs the
-benchmark suite in simulation mode for pushes to `main`, pull requests, and
-manual backtest runs. CodSpeed tracks benchmark history and reports performance
-changes directly on pull requests.
+benchmark suite in simulation mode for every push to `main` and every manual
+backtest run. On pull requests, the benchmark job runs only when files that can
+change the measured host-side performance are modified:
+
+- production C++ component sources and headers,
+- benchmark sources,
+- host C++ test support used by the benchmark target,
+- benchmark CMake wiring, or
+- the CodSpeed workflow itself.
+
+Documentation-only, Python code generation, YAML example, and project metadata
+pull requests skip the benchmark job because they do not affect the measured C++
+hot paths. CodSpeed tracks benchmark history and reports performance changes
+directly on pull requests where those measurements are relevant.
 
 The workflow uses GitHub's OpenID Connect integration, so no repository API key
 is required.
