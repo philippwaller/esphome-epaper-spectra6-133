@@ -113,8 +113,8 @@ jobs:
           cache-dependency-path: |
             requirements-dev.txt
             .python-version
-      - name: Install test dependencies
-        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: Set up local developer environment
+        run: bash ./scripts/setup.sh
       - name: Run host tests and build coverage report
         run: bash ./scripts/run-host-tests.sh
       - name: Upload coverage artifacts
