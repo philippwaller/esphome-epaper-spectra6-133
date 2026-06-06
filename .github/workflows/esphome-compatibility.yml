@@ -146,7 +146,7 @@ jobs:
           path: |
             ~/.platformio
             ~/.cache/esphome
-          key: esphome-${{ needs.esphome-matrix.outputs.mode }}-compile-${{ runner.os }}-${{ matrix.esphome }}-${{ matrix.config }}-${{ hashFiles('configs/**/*.yaml', 'packages/**/*.yaml', 'partitions/**/*', 'components/epaper_spectra6_133/**/*', 'requirements.txt', 'requirements-dev.txt', 'scripts/esphome-versions.py', 'scripts/compile-configs.sh') }}
+          key: esphome-${{ needs.esphome-matrix.outputs.mode }}-compile-${{ runner.os }}-${{ matrix.esphome }}-${{ matrix.config }}-${{ hashFiles('.python-version', 'configs/**/*.yaml', 'packages/**/*.yaml', 'partitions/**/*', 'components/epaper_spectra6_133/**/*', 'requirements.txt', 'requirements-dev.txt', 'scripts/esphome-versions.py', 'scripts/compile-configs.sh') }}
           restore-keys: |
             esphome-${{ needs.esphome-matrix.outputs.mode }}-compile-${{ runner.os }}-${{ matrix.esphome }}-
       - uses: ./.github/actions/setup-esphome-env

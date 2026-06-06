@@ -13,6 +13,7 @@ runs:
         cache-dependency-path: |
           requirements.txt
           requirements-dev.txt
+          .python-version
     - name: Set up local developer environment
       shell: bash
       env:

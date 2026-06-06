@@ -4,20 +4,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${ROOT_DIR}/build/tests"
 COVERAGE_DIR="${ROOT_DIR}/build/coverage"
+PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
 
-if [[ -x "${ROOT_DIR}/.venv/bin/python" ]]; then
-  PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
-elif command -v python >/dev/null 2>&1; then
-  PYTHON_BIN="$(command -v python)"
-elif command -v python3 >/dev/null 2>&1; then
-  PYTHON_BIN="$(command -v python3)"
-else
-  echo "Python was not found." >&2
+if [[ ! -x "${PYTHON_BIN}" ]]; then
+  echo "Project virtual environment not found. Run ./scripts/setup.sh first." >&2
   exit 1
 fi
 
 if ! "${PYTHON_BIN}" -m gcovr --version >/dev/null 2>&1; then
-  echo "gcovr is not installed for ${PYTHON_BIN}. Run ./scripts/setup.sh first, or pip install -r requirements-dev.txt." >&2
+  echo "gcovr is not installed for ${PYTHON_BIN}. Run ./scripts/setup.sh first." >&2
   exit 1
 fi
 

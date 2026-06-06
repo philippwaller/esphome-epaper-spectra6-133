@@ -305,7 +305,7 @@ The goal is always the same: resize the asset, map it to the panel palette, and 
 2. Convert it to the Spectra 6 palette using one of the presets. The script resizes the image to the target canvas and reduces it to the six panel colours, using dithering where needed to approximate intermediate tones:
 
    ```bash
-   python scripts/convert_image.py image.jpg --preset default --output configs/images/my-image.png
+   ./.venv/bin/python scripts/convert_image.py image.jpg --preset default --output configs/images/my-image.png
    ```
 
 3. Import the converted PNG through ESPHome's `image:` component.
@@ -546,9 +546,9 @@ This repository includes `scripts/convert_image.py`, an optional CLI that conver
 ### Command synopsis
 
 ```bash
-python scripts/convert_image.py INPUT [OUTPUT] [options]
-python scripts/convert_image.py --guided
-python scripts/convert_image.py --list-presets
+./.venv/bin/python scripts/convert_image.py INPUT [OUTPUT] [options]
+./.venv/bin/python scripts/convert_image.py --guided
+./.venv/bin/python scripts/convert_image.py --list-presets
 ```
 
 If `OUTPUT` is omitted, the script writes a PNG to `configs/images/` and generates a filename from the active settings. `--output` takes precedence over the positional `OUTPUT` argument.
@@ -593,11 +593,11 @@ If `INPUT` is omitted, the script enters guided mode automatically.
 ### Example commands
 
 ```bash
-python scripts/convert_image.py image.jpg
-python scripts/convert_image.py image.jpg hero.png --preset graphics
-python scripts/convert_image.py image.jpg --fit contain --background black --output configs/images/poster.png
-python scripts/convert_image.py image.jpg --preset vivid --contrast 1.20
-python scripts/convert_image.py screenshot.png --preset accurate --sharpness 1.02
+./.venv/bin/python scripts/convert_image.py image.jpg
+./.venv/bin/python scripts/convert_image.py image.jpg hero.png --preset graphics
+./.venv/bin/python scripts/convert_image.py image.jpg --fit contain --background black --output configs/images/poster.png
+./.venv/bin/python scripts/convert_image.py image.jpg --preset vivid --contrast 1.20
+./.venv/bin/python scripts/convert_image.py screenshot.png --preset accurate --sharpness 1.02
 ```
 
 ### Use presets for common inputs
@@ -605,11 +605,11 @@ python scripts/convert_image.py screenshot.png --preset accurate --sharpness 1.0
 Presets provide recommended starting points for common source material. The fixed Spectra 6 palette still stylises results, especially for photographic inputs, so treat presets as defaults to start from rather than universal optima. Explicit flags still override preset values.
 
 ```bash
-python scripts/convert_image.py image.jpg --preset default
-python scripts/convert_image.py image.jpg --preset vivid
-python scripts/convert_image.py poster.png --preset graphics
-python scripts/convert_image.py screenshot.png --preset accurate
-python scripts/convert_image.py image.jpg --preset vivid --saturation 1.20
+./.venv/bin/python scripts/convert_image.py image.jpg --preset default
+./.venv/bin/python scripts/convert_image.py image.jpg --preset vivid
+./.venv/bin/python scripts/convert_image.py poster.png --preset graphics
+./.venv/bin/python scripts/convert_image.py screenshot.png --preset accurate
+./.venv/bin/python scripts/convert_image.py image.jpg --preset vivid --saturation 1.20
 ```
 
 | Preset | Best for | Goal |
@@ -624,7 +624,7 @@ Manual flags always win over preset defaults. For example, `--preset vivid --sat
 ### Guided mode
 
 ```bash
-python scripts/convert_image.py --guided
+./.venv/bin/python scripts/convert_image.py --guided
 ```
 
 Guided mode walks through the available settings interactively. It is helpful when exploring conversion options without memorising command-line flags.
