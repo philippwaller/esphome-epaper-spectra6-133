@@ -15,6 +15,8 @@ CONF_RESET_PIN = "reset_pin"
 CONF_POWER_PIN = "power_pin"
 CONF_CHANGE_DETECTION_MODE = "change_detection_mode"
 CONF_UPDATE_MODE = "update_mode"
+CONF_AUTO_SLEEP = "auto_sleep"
+CONF_POWER_OFF_AFTER_SLEEP = "power_off_after_sleep"
 
 # ESP-IDF SPI host enum aliases. Raw integer values are also accepted.
 _SPI_HOST_NAMES: dict[str, int] = {

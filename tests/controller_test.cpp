@@ -429,6 +429,31 @@ TEST_F(ControllerTest, SendRefreshPofEmitsPofRegisterWrite) {
   EXPECT_EQ(state().cs_levels[1], 1U);
 }
 
+// send_deep_sleep() emits DSLP with the datasheet-required 0xA5 payload.
+TEST_F(ControllerTest, SendDeepSleepEmitsDslpRegisterWrite) {
+  ASSERT_TRUE(controller_.init_panel());
+  test_support::reset_transport_state(transport_);
+
+  ASSERT_TRUE(controller_.send_deep_sleep());
+
+  const auto sleep_writes = filter_register_writes_by_command(state().operations, DSLP);
+  ASSERT_EQ(sleep_writes.size(), 1U);
+  EXPECT_EQ(sleep_writes[0].data, (std::vector<uint8_t>{0xA5}));
+  EXPECT_EQ(sleep_writes[0].cs_levels, (std::array<uint32_t, 2>{0, 0}));
+  EXPECT_EQ(state().cs_levels[0], 1U);
+  EXPECT_EQ(state().cs_levels[1], 1U);
+}
+
+TEST_F(ControllerTest, SendDeepSleepReturnsFalseAndReleasesCsOnWriteFailure) {
+  ASSERT_TRUE(controller_.init_panel());
+  test_support::reset_transport_state(transport_);
+  state().write_register_results.push_back(ESP_FAIL);
+
+  EXPECT_FALSE(controller_.send_deep_sleep());
+  EXPECT_EQ(state().cs_levels[0], 1U);
+  EXPECT_EQ(state().cs_levels[1], 1U);
+}
+
 // is_display_busy() returns false when the stub reports busy_level() == 1.
 TEST_F(ControllerTest, IsDisplayBusyReturnsFalseWhenBusyPinIsHigh) {
   // The transport stub always returns busy_level() == 1 (BUSY pin high = idle).

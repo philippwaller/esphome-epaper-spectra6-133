@@ -315,6 +315,8 @@ Use this local form only when the package file is present next to your ESPHome Y
 | `power_pin` | pin | *required* | Controls the power supply to the panel |
 | `update_mode` | string | `full` | Whether `update()` transfers the full frame (`full`) or only the detected changed region (`partial`) |
 | `change_detection_mode` | string | `track` | How to detect changed pixels: `track` (pixel-write accumulator) or `compare` (frame comparison, requires an additional 960 KB of PSRAM) |
+| `auto_sleep` | bool | `true` | Send the panel deep-sleep command after each successful refresh |
+| `power_off_after_sleep` | bool | `false` | Also switch `power_pin` low after the panel has entered deep sleep |
 | `update_interval` | time | `never` | How often to re-render the display. Use `never` to update only on demand. Accepts values like `30s`, `5min`, `1h`. |
 | `auto_clear_enabled` | bool | `true` | Fill the canvas with white before the lambda runs on each `update()` call. Has no effect on `flush()` or `flush_region()`. |
 | `lambda` | lambda | — | Drawing code that runs on every `update()` call. Receives the display as `it`. Use `it.print()`, `it.filled_rectangle()`, `it.image()`, etc. to compose the screen. |
@@ -336,6 +338,9 @@ Use this local form only when the package file is present next to your ESPHome Y
 | `reset_change_tracking()` | Clears the accumulated changed rectangle |
 | `is_busy()` | Returns `true` while a display job is active or waiting to run |
 | `is_ready()` | Returns `true` after the display has been initialised |
+| `is_sleeping()` | Returns `true` after the panel has successfully entered deep sleep |
+| `sleep()` | Schedules the panel to enter deep sleep |
+| `wake()` | Reinitialises a sleeping panel immediately |
 | `cancel()` | Cancels the current or pending display job where it is safe to do so |
 
 ---
@@ -617,6 +622,52 @@ interval:
 
 > [!WARNING]
 > Avoid blocking on `is_busy()` in a tight loop — this starves the ESPHome main loop. The cooperative pipeline is designed to be polled, not awaited.
+
+---
+
+### 10. How deep sleep works
+
+This component automatically sends the panel to deep sleep after every successful refresh. Deep sleep is the normal idle state: it reduces panel-side power consumption while preserving the visible e-paper image.
+
+The wake-up path is handled by the component. When you call `update()`, `update_region()`, `flush()`, or `flush_region()` while the panel is sleeping, the component powers the display path, performs a hardware reset, reruns the full initialization sequence, and then transfers the next frame.
+
+Most dashboards, clocks, photo frames, and low-frequency status displays should keep the default:
+
+```yaml
+display:
+  - platform: epaper_spectra6_133
+    id: epd
+    auto_sleep: true
+```
+
+If you want more control over the sleep cycle of your display, disable automatic sleep and decide from your own automations when the panel should enter deep sleep:
+
+```yaml
+display:
+  - platform: epaper_spectra6_133
+    id: epd
+    auto_sleep: false
+```
+
+With automatic sleep disabled, call `sleep()` after the last refresh in your own workflow:
+
+```yaml
+button:
+  - platform: template
+    name: "Sleep display"
+    on_press:
+      - lambda: id(epd).sleep();
+```
+
+| Method | Behaviour |
+|--------|-----------|
+| `sleep()` | Schedules a cooperative deep-sleep job. If a hardware refresh is still running, the job waits until BUSY is idle before sending the deep-sleep command. |
+| `wake()` | Wakes a sleeping panel immediately by powering the display path, applying hardware reset, and running the full panel initialization sequence. |
+| `is_sleeping()` | Returns `true` after the panel has successfully entered deep sleep. |
+| `update()` / `update_region()` | Automatically wake the panel when needed, render the lambda, refresh the panel, and then enter deep sleep again when `auto_sleep` is enabled. |
+| `flush()` / `flush_region()` | Automatically wake the panel when needed, refresh from the current framebuffer, and then enter deep sleep again when `auto_sleep` is enabled. |
+
+`power_off_after_sleep` is a stronger board-level option. It sends the panel deep-sleep command first, then drives `power_pin` low. The next display operation turns power back on and performs a cold wake. Keep this disabled unless your hardware has been verified with the external load switch off.
 
 ---
 

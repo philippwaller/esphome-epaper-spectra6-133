@@ -605,6 +605,23 @@ bool Controller::send_refresh_pof() {
   return true;
 }
 
+/**
+ * @brief Sends the panel deep-sleep command (DSLP, data 0xA5).
+ *
+ * The GDEP133C02 datasheet specifies command 0x07 with data byte 0xA5 to
+ * enter deep sleep.  The command is only safe after BUSY has returned high.
+ */
+bool Controller::send_deep_sleep() {
+  this->transport_.set_cs_all(0);
+  const uint8_t sleep_data[] = {0xA5};
+  if (this->transport_.write_register(DSLP, sleep_data, sizeof(sleep_data)) != ESP_OK) {
+    this->transport_.set_cs_all(1);
+    return false;
+  }
+  this->transport_.set_cs_all(1);
+  return true;
+}
+
 /** @brief Returns true while the panel is busy (BUSY pin LOW = working). */
 bool Controller::is_display_busy() const { return this->transport_.busy_level() == 0; }
 

@@ -7,6 +7,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_ID, CONF_LAMBDA
 
 from . import (
+    CONF_AUTO_SLEEP,
     CONF_BUSY_PIN,
     CONF_CHANGE_DETECTION_MODE,
     CONF_CLK_PIN,
@@ -15,6 +16,7 @@ from . import (
     CONF_DATA0_PIN,
     CONF_DATA1_PIN,
     CONF_POWER_PIN,
+    CONF_POWER_OFF_AFTER_SLEEP,
     CONF_RESET_PIN,
     CONF_SPI_HOST,
     CONF_UPDATE_MODE,
@@ -57,6 +59,8 @@ CONFIG_SCHEMA = display_core.FULL_DISPLAY_SCHEMA.extend(
         cv.Optional(CONF_UPDATE_MODE, default="full"): cv.one_of(
             *_UPDATE_MODES, lower=True
         ),
+        cv.Optional(CONF_AUTO_SLEEP, default=True): cv.boolean,
+        cv.Optional(CONF_POWER_OFF_AFTER_SLEEP, default=False): cv.boolean,
     }
 ).extend(cv.polling_component_schema("never"))
 
@@ -82,6 +86,8 @@ async def to_code(config):
         )
     )
     cg.add(var.set_update_mode(_UPDATE_MODES[config[CONF_UPDATE_MODE]]))
+    cg.add(var.set_auto_sleep(config[CONF_AUTO_SLEEP]))
+    cg.add(var.set_power_off_after_sleep(config[CONF_POWER_OFF_AFTER_SLEEP]))
 
     if CONF_LAMBDA in config:
         lambda_ = await cg.process_lambda(
