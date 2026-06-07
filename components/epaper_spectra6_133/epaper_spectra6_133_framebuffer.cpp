@@ -71,8 +71,9 @@ void draw_checkerboard(uint8_t *buffer) {
  * After finding the min/max differing byte column and row, the range is
  * converted to logical pixel coordinates directly.
  *
- * Uses memcmp per row for fast early-exit detection, then narrows to the
- * exact differing byte-column range within changed rows.
+ * Scans from the top and bottom to avoid row-level comparisons once the
+ * changed vertical range is known, then narrows to the exact differing
+ * byte-column range within that row span.
  */
 UpdateRegion find_changed_region(const uint8_t *current, const uint8_t *previous_frame) {
   UpdateRegion rect;
@@ -81,26 +82,36 @@ UpdateRegion find_changed_region(const uint8_t *current, const uint8_t *previous
     return rect;
   }
 
-  int row_min = EPD_HEIGHT;
-  int row_max = -1;
+  int row_min = 0;
+  int row_max = EPD_HEIGHT - 1;
   int col_byte_min = static_cast<int>(ROW_BYTES);
   int col_byte_max = -1;
 
-  for (int row = 0; row < EPD_HEIGHT; row++) {
+  while (row_min < EPD_HEIGHT) {
+    const size_t row_offset = static_cast<size_t>(row_min) * ROW_BYTES;
+    if (std::memcmp(current + row_offset, previous_frame + row_offset, ROW_BYTES) != 0) {
+      break;
+    }
+    row_min++;
+  }
+
+  if (row_min == EPD_HEIGHT) {
+    // No differences found.
+    return rect;
+  }
+
+  while (row_max > row_min) {
+    const size_t row_offset = static_cast<size_t>(row_max) * ROW_BYTES;
+    if (std::memcmp(current + row_offset, previous_frame + row_offset, ROW_BYTES) != 0) {
+      break;
+    }
+    row_max--;
+  }
+
+  for (int row = row_min; row <= row_max; row++) {
     const size_t row_offset = static_cast<size_t>(row) * ROW_BYTES;
     const uint8_t *cur_row = current + row_offset;
     const uint8_t *prev_row = previous_frame + row_offset;
-
-    // Fast row-level scan to detect whether this row differs at all.
-    if (std::memcmp(cur_row, prev_row, ROW_BYTES) == 0) {
-      continue;
-    }
-
-    // Row has at least one differing byte — find the exact byte-column range.
-    if (row < row_min) {
-      row_min = row;
-    }
-    row_max = row;
 
     // Scan forward for the first differing byte in this row.
     for (int col = 0; col < static_cast<int>(ROW_BYTES); col++) {
@@ -121,11 +132,6 @@ UpdateRegion find_changed_region(const uint8_t *current, const uint8_t *previous
         break;
       }
     }
-  }
-
-  if (row_max < 0) {
-    // No differences found.
-    return rect;
   }
 
   // Byte column N contains logical pixels 2*N and 2*N+1.
