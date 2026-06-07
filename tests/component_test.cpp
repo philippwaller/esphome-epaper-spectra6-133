@@ -106,7 +106,6 @@ class EpaperSpectra6133ComponentTest : public ::testing::Test {
   bool pending_has_pending() const { return display_.pending_job_.has_pending; }
   AsyncJobType pending_type() const { return display_.pending_job_.type; }
   bool is_in_hw_refresh_stage() const { return display_.is_in_hw_refresh_stage_(); }
-  void set_sleeping(bool sleeping) { display_.sleeping_ = sleeping; }
   test_support::TransportState &transport_state() {
     return test_support::transport_state(display_.transport_);
   }
@@ -463,18 +462,18 @@ TEST_F(EpaperSpectra6133ComponentTest, SleepSchedulesJobAndMarksDisplaySleeping)
   EXPECT_EQ(count_register_writes(transport_state().operations, DSLP), 1U);
 }
 
-TEST_F(EpaperSpectra6133ComponentTest, SleepReturnsImmediatelyWhenAlreadySleeping) {
-  display_.flush();
-  ASSERT_TRUE(display_.is_busy());
-  ASSERT_EQ(job_type(), AsyncJobType::FLUSH);
+TEST_F(EpaperSpectra6133ComponentTest, SleepIsIdempotentWhenAlreadySleeping) {
+  display_.sleep();
+  run_loop_until_done();
+  ASSERT_TRUE(display_.is_sleeping());
+  ASSERT_FALSE(display_.is_busy());
 
-  set_sleeping(true);
+  reset_transport_state();
+
   display_.sleep();
 
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::FLUSH);
-  EXPECT_FALSE(job_cancelled());
-  EXPECT_FALSE(pending_has_pending());
+  EXPECT_FALSE(display_.is_busy());
+  EXPECT_EQ(count_register_writes(transport_state().operations, DSLP), 0U);
 }
 
 TEST_F(EpaperSpectra6133ComponentTest, UpdateAutoWakesSleepingDisplayBeforeSchedulingJob) {
