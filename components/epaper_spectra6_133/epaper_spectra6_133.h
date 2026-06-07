@@ -59,6 +59,7 @@ enum class AsyncJobType {
   UPDATE_REGION,  // Partial update: run lambda + region transfer.
   FLUSH,          // Full flush: full-frame transfer without running lambda.
   FLUSH_REGION,   // Partial flush: region transfer without running lambda.
+  SLEEP,          // Enter panel deep sleep without modifying the framebuffer.
 };
 
 /**
@@ -81,14 +82,15 @@ enum class AsyncStage {
   RG_IC1,    // CMD66+PTLW+DTM+rows for IC1 (skipped if !has_region[1]).
   RG_DUMMY,  // Arm dummy PTLWs for ICs with no changed data.
   // Shared refresh sequence
-  RF_PON,        // Send PON command; transition immediately.
-  RF_WAIT_PON,   // Poll is_display_busy(); yield until BUSY goes high.
-  RF_DRF_DELAY,  // Non-blocking 30 ms post-PON delay before DRF.
-  RF_DRF,        // Send DRF command; transition immediately.
-  RF_WAIT_DRF,   // Poll is_display_busy(); yield until BUSY goes high (up to 20 s).
-  RF_POF,        // Send POF command; transition immediately.
-  RF_WAIT_POF,   // Poll is_display_busy(); yield until BUSY goes high.
-  RF_POST,       // Non-blocking post-refresh delay (10 ms full / 300 ms region).
+  RF_PON,         // Send PON command; transition immediately.
+  RF_WAIT_PON,    // Poll is_display_busy(); yield until BUSY goes high.
+  RF_DRF_DELAY,   // Non-blocking 30 ms post-PON delay before DRF.
+  RF_DRF,         // Send DRF command; transition immediately.
+  RF_WAIT_DRF,    // Poll is_display_busy(); yield until BUSY goes high (up to 20 s).
+  RF_POF,         // Send POF command; transition immediately.
+  RF_WAIT_POF,    // Poll is_display_busy(); yield until BUSY goes high.
+  SL_DEEP_SLEEP,  // Send DSLP+0xA5 once BUSY is idle-high.
+  RF_POST,        // Non-blocking post-refresh delay (10 ms full / 300 ms region).
   // Finalization
   FINISHING,  // disable_partial_regions (region jobs), update previous frame, clear job.
 };
@@ -201,6 +203,20 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   void set_change_detection_mode(ChangeDetectionMode mode) { this->change_detection_mode_ = mode; }
   /** @brief Sets whether update() performs full-frame or auto-partial refresh. */
   void set_update_mode(UpdateMode mode) { this->update_mode_ = mode; }
+  /**
+   * @brief Sets whether successful refreshes automatically enter deep sleep.
+   *
+   * @param auto_sleep  True to send the panel deep-sleep command after each
+   * successful refresh; false to leave the panel awake until sleep() is called.
+   */
+  void set_auto_sleep(bool auto_sleep) { this->auto_sleep_ = auto_sleep; }
+  /**
+   * @brief Sets whether deep sleep also disables the external panel load switch.
+   *
+   * @param power_off_after_sleep  True to drive power_pin low after the panel
+   * enters deep sleep; false to leave the panel power rail enabled.
+   */
+  void set_power_off_after_sleep(bool power_off_after_sleep) { this->power_off_after_sleep_ = power_off_after_sleep; }
 
   /** @brief Allocates the framebuffer and configures the hardware. */
   void setup() override;
@@ -296,6 +312,13 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
 
   /** @brief Returns whether the panel hardware has been initialized and is ready for explicit updates. */
   bool is_ready() const { return this->controller_.is_initialized(); }
+  /**
+   * @brief Returns whether the panel was successfully placed in deep sleep.
+   *
+   * @return True after the panel has entered deep sleep; false while awake or
+   * while a sleep request is still pending.
+   */
+  bool is_sleeping() const { return this->sleeping_; }
 
   // -------------------------------------------------------------------------
   // Change detection
@@ -358,6 +381,22 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
    */
   void cancel();
 
+  /**
+   * @brief Schedules the panel to enter deep sleep and returns immediately.
+   *
+   * If a refresh is physically in progress, the sleep request waits until the
+   * BUSY line is released before sending the datasheet-defined DSLP command.
+   */
+  void sleep();
+
+  /**
+   * @brief Wakes a sleeping panel by rerunning the full hardware init sequence.
+   *
+   * @return True when the display is initialized and ready for a new transfer;
+   * false if initialization fails or the component is in a failed state.
+   */
+  bool wake();
+
  protected:
   /** @brief Returns the logical panel width reported to ESPHome drawing primitives. */
   int get_width_internal() override { return EPD_WIDTH; }
@@ -405,12 +444,16 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   void process_rf_wait_drf_stage_();
   void process_rf_pof_stage_();
   void process_rf_wait_pof_stage_();
+  void process_sl_deep_sleep_stage_();
   void process_rf_post_stage_();
 
   Transport transport_;
   Controller controller_;
   ChangeDetectionMode change_detection_mode_{ChangeDetectionMode::TRACK};
   UpdateMode update_mode_{UpdateMode::FULL};
+  bool auto_sleep_{true};
+  bool power_off_after_sleep_{false};
+  bool sleeping_{false};
   UpdateRegion tracked_region_{};
   uint8_t *previous_frame_buffer_{nullptr};
   uint32_t draw_pixels_since_yield_{0};

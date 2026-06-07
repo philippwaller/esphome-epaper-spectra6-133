@@ -134,6 +134,14 @@ class Controller {
   /** @brief Sends the POF command with its payload (CS all low → write POF → CS all high). */
   bool send_refresh_pof();
 
+  /**
+   * @brief Sends the deep-sleep command specified by the panel datasheet.
+   *
+   * The caller must only invoke this while BUSY is idle-high.  The command is
+   * broadcast to both controller halves and requires payload byte 0xA5.
+   */
+  bool send_deep_sleep();
+
   /** @brief Returns true while the display is busy (BUSY pin low = panel working). */
   bool is_display_busy() const;
 

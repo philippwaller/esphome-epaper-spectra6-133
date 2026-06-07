@@ -1,3 +1,7 @@
+#include <cstddef>
+#include <cstring>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "esp_timer.h"  // provides g_mock_timer_us
@@ -23,6 +27,35 @@
 
 namespace esphome {
 namespace epaper_spectra6_133 {
+
+namespace {
+
+size_t count_register_writes(const std::vector<test_support::Operation> &operations, uint8_t command) {
+  size_t count = 0;
+  for (const auto &operation : operations) {
+    if (operation.type == test_support::OperationType::kWriteRegister && operation.command == command) {
+      count++;
+    }
+  }
+  return count;
+}
+
+size_t first_operation_index(const std::vector<test_support::Operation> &operations,
+                             test_support::OperationType type, uint8_t command = 0) {
+  for (size_t index = 0; index < operations.size(); index++) {
+    const auto &operation = operations[index];
+    if (operation.type != type) {
+      continue;
+    }
+    if (type == test_support::OperationType::kWriteRegister && operation.command != command) {
+      continue;
+    }
+    return index;
+  }
+  return operations.size();
+}
+
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // Test fixture
@@ -76,6 +109,7 @@ class EpaperSpectra6133ComponentTest : public ::testing::Test {
   test_support::TransportState &transport_state() {
     return test_support::transport_state(display_.transport_);
   }
+  void reset_transport_state() { test_support::reset_transport_state(display_.transport_); }
 
   // Simulate a busy display (BUSY pin LOW = panel executing refresh).
   void set_display_busy(bool busy) { transport_state().mock_busy_level = busy ? 0 : 1; }
@@ -411,6 +445,118 @@ TEST_F(EpaperSpectra6133ComponentTest, BaseClassClearDispatchUsesWhite) {
     }
     EXPECT_TRUE(all_white);
   }
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, SleepSchedulesJobAndMarksDisplaySleeping) {
+  reset_transport_state();
+
+  display_.sleep();
+  EXPECT_TRUE(display_.is_busy());
+  EXPECT_EQ(job_type(), AsyncJobType::SLEEP);
+
+  run_loop_until_done();
+
+  EXPECT_FALSE(display_.is_busy());
+  EXPECT_TRUE(display_.is_sleeping());
+  EXPECT_FALSE(display_.is_ready());
+  EXPECT_EQ(count_register_writes(transport_state().operations, DSLP), 1U);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, SleepIsIdempotentWhenAlreadySleeping) {
+  display_.sleep();
+  run_loop_until_done();
+  ASSERT_TRUE(display_.is_sleeping());
+  ASSERT_FALSE(display_.is_busy());
+
+  reset_transport_state();
+
+  display_.sleep();
+
+  EXPECT_FALSE(display_.is_busy());
+  EXPECT_EQ(count_register_writes(transport_state().operations, DSLP), 0U);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, UpdateAutoWakesSleepingDisplayBeforeSchedulingJob) {
+  display_.sleep();
+  run_loop_until_done();
+  ASSERT_TRUE(display_.is_sleeping());
+
+  reset_transport_state();
+
+  display_.update();
+
+  EXPECT_FALSE(display_.is_sleeping());
+  EXPECT_TRUE(display_.is_ready());
+  EXPECT_TRUE(display_.is_busy());
+  EXPECT_EQ(job_type(), AsyncJobType::UPDATE);
+  EXPECT_GT(count_register_writes(transport_state().operations, TRES), 0U);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, SleepDuringRefreshStageWaitsForBusyBeforeStarting) {
+  display_.flush();
+
+  set_display_busy(true);
+  for (int i = 0; i < 2000 && !is_in_hw_refresh_stage(); i++) {
+    g_mock_timer_us += 1000000LL;
+    display_.loop();
+  }
+  ASSERT_TRUE(is_in_hw_refresh_stage());
+
+  display_.sleep();
+
+  EXPECT_TRUE(job_cancelled());
+  EXPECT_TRUE(pending_has_pending());
+  EXPECT_EQ(pending_type(), AsyncJobType::SLEEP);
+
+  display_.loop();
+  EXPECT_TRUE(display_.is_busy());
+
+  set_display_busy(false);
+  display_.loop();
+  EXPECT_TRUE(display_.is_busy());
+  EXPECT_EQ(job_type(), AsyncJobType::SLEEP);
+
+  run_loop_until_done();
+  EXPECT_TRUE(display_.is_sleeping());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, AutoSleepSleepsAfterFullRefresh) {
+  display_.set_auto_sleep(true);
+  reset_transport_state();
+
+  display_.flush();
+  run_loop_until_done();
+
+  EXPECT_TRUE(display_.is_sleeping());
+  EXPECT_EQ(count_register_writes(transport_state().operations, DSLP), 1U);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, AutoSleepSleepsAfterPartialRefresh) {
+  display_.set_auto_sleep(true);
+  reset_transport_state();
+
+  display_.flush_region(10, 20, 80, 60);
+  run_loop_until_done();
+
+  EXPECT_TRUE(display_.is_sleeping());
+  EXPECT_EQ(count_register_writes(transport_state().operations, DSLP), 1U);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, PowerOffAfterSleepDisablesLoadSwitchAfterDslp) {
+  display_.set_power_off_after_sleep(true);
+  reset_transport_state();
+
+  display_.sleep();
+  run_loop_until_done();
+
+  const auto &operations = transport_state().operations;
+  const size_t dslp_index = first_operation_index(operations, test_support::OperationType::kWriteRegister, DSLP);
+  const size_t load_switch_index = first_operation_index(operations, test_support::OperationType::kSetLoadSwitch);
+
+  ASSERT_LT(dslp_index, operations.size());
+  ASSERT_LT(load_switch_index, operations.size());
+  EXPECT_LT(dslp_index, load_switch_index);
+  EXPECT_EQ(operations[load_switch_index].level, 0U);
 }
 
 }  // namespace epaper_spectra6_133

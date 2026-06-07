@@ -107,8 +107,13 @@ void EpaperSpectra6133::dump_config() {
   ESP_LOGCONFIG(TAG, "  Change detection mode: %s",
                 this->change_detection_mode_ == ChangeDetectionMode::COMPARE ? "compare" : "track");
   ESP_LOGCONFIG(TAG, "  Update mode: %s", this->update_mode_ == UpdateMode::PARTIAL ? "partial" : "full");
-  ESP_LOGCONFIG(TAG, "  Status: %s",
-                this->is_failed() ? "failed" : (this->controller_.is_initialized() ? "ready" : "not initialized"));
+  ESP_LOGCONFIG(TAG, "  Auto sleep: %s", this->auto_sleep_ ? "yes" : "no");
+  ESP_LOGCONFIG(TAG, "  Power off after sleep: %s", this->power_off_after_sleep_ ? "yes" : "no");
+  ESP_LOGCONFIG(
+      TAG, "  Status: %s",
+      this->is_failed()
+          ? "failed"
+          : (this->sleeping_ ? "sleeping" : (this->controller_.is_initialized() ? "ready" : "not initialized")));
   LOG_UPDATE_INTERVAL(this);
 }
 
@@ -171,6 +176,7 @@ bool EpaperSpectra6133::initialize() {
     return false;
   }
 
+  this->sleeping_ = false;
   ESP_LOGI(TAG, "Display initialized");
   return true;
 }
@@ -239,6 +245,33 @@ void EpaperSpectra6133::flush_region(int x, int y, int width, int height) {
     return;
   }
   this->schedule_async_job_(AsyncJobType::FLUSH_REGION, x, y, width, height);
+}
+
+void EpaperSpectra6133::sleep() {
+  ESP_LOGD(TAG, "Deep sleep requested");
+  if (this->is_failed()) {
+    ESP_LOGE(TAG, "Display not ready, cannot schedule sleep");
+    return;
+  }
+  if (this->sleeping_) {
+    return;
+  }
+  if (!this->controller_.is_initialized() && !this->initialize()) {
+    ESP_LOGE(TAG, "Display not ready, cannot schedule sleep");
+    return;
+  }
+  this->schedule_async_job_(AsyncJobType::SLEEP, 0, 0, 0, 0);
+}
+
+bool EpaperSpectra6133::wake() {
+  if (this->is_failed()) {
+    return false;
+  }
+  if (this->controller_.is_initialized() && !this->sleeping_) {
+    return true;
+  }
+  ESP_LOGD(TAG, "Waking display from deep sleep");
+  return this->initialize();
 }
 
 // ---------------------------------------------------------------------------
@@ -314,6 +347,9 @@ bool EpaperSpectra6133::ensure_initialized_() {
   }
   if (this->controller_.is_initialized()) {
     return true;
+  }
+  if (this->sleeping_) {
+    return this->wake();
   }
   return this->initialize();
 }
@@ -453,8 +489,10 @@ void EpaperSpectra6133::schedule_async_job_(AsyncJobType type, int x, int y, int
  * started immediately so is_async_busy() remains true without a gap.
  */
 void EpaperSpectra6133::abort_async_job_() {
-  this->controller_.end_half_transfer();        // safe to call even if CS was already high
-  this->controller_.disable_partial_regions();  // safe: BUSY has cleared before we reach here
+  this->controller_.end_half_transfer();  // safe to call even if CS was already high
+  if (!this->sleeping_) {
+    this->controller_.disable_partial_regions();  // safe: BUSY has cleared before we reach here
+  }
   this->async_job_ = {};
   ESP_LOGD(TAG, "Async display job aborted");
 
@@ -477,7 +515,7 @@ void EpaperSpectra6133::abort_async_job_() {
  * @brief Finalises a completed async job: cleanup, update previous frame, reset tracking, and clear.
  */
 void EpaperSpectra6133::finish_async_job_() {
-  if (!this->async_job_.use_full_frame) {
+  if (!this->async_job_.use_full_frame && !this->sleeping_) {
     this->controller_.disable_partial_regions();
   }
   this->update_previous_frame_();
@@ -508,6 +546,7 @@ bool EpaperSpectra6133::is_in_hw_refresh_stage_() const {
     case AsyncStage::RF_WAIT_DRF:
     case AsyncStage::RF_POF:
     case AsyncStage::RF_WAIT_POF:
+    case AsyncStage::SL_DEEP_SLEEP:
       return true;
     default:
       return false;
@@ -555,6 +594,9 @@ void EpaperSpectra6133::process_async_step_() {
     case AsyncStage::RF_WAIT_POF:
       this->process_rf_wait_pof_stage_();
       break;
+    case AsyncStage::SL_DEEP_SLEEP:
+      this->process_sl_deep_sleep_stage_();
+      break;
     case AsyncStage::RF_POST:
       this->process_rf_post_stage_();
       break;
@@ -578,6 +620,11 @@ void EpaperSpectra6133::process_async_step_() {
  * Computes PartialRegion descriptors for region-path jobs.
  */
 void EpaperSpectra6133::process_init_stage_() {
+  if (this->async_job_.type == AsyncJobType::SLEEP) {
+    this->async_job_.stage = AsyncStage::SL_DEEP_SLEEP;
+    return;
+  }
+
   const bool needs_lambda =
       (this->async_job_.type == AsyncJobType::UPDATE || this->async_job_.type == AsyncJobType::UPDATE_REGION);
 
@@ -861,7 +908,36 @@ void EpaperSpectra6133::process_rf_wait_pof_stage_() {
     return;  // still busy; try again next loop()
   }
   this->async_job_.stage_start_us = esp_timer_get_time();
-  this->async_job_.stage = AsyncStage::RF_POST;
+  this->async_job_.stage = this->auto_sleep_ ? AsyncStage::SL_DEEP_SLEEP : AsyncStage::RF_POST;
+}
+
+/**
+ * @brief SL_DEEP_SLEEP: send DSLP+0xA5 once BUSY is idle-high.
+ *
+ * Region jobs clear PTLW before sleeping because no further SPI writes should
+ * follow after the controller has entered deep sleep.
+ */
+void EpaperSpectra6133::process_sl_deep_sleep_stage_() {
+  if (this->controller_.is_display_busy()) {
+    return;
+  }
+
+  if (!this->async_job_.use_full_frame) {
+    this->controller_.disable_partial_regions();
+  }
+  if (!this->controller_.send_deep_sleep()) {
+    ESP_LOGE(TAG, "Async deep sleep send failed");
+    this->abort_async_job_();
+    return;
+  }
+
+  this->controller_.reset();
+  this->sleeping_ = true;
+  if (this->power_off_after_sleep_) {
+    this->transport_.set_load_switch(0);
+  }
+  this->async_job_.stage_start_us = esp_timer_get_time();
+  this->async_job_.stage = this->async_job_.type == AsyncJobType::SLEEP ? AsyncStage::FINISHING : AsyncStage::RF_POST;
 }
 
 /**

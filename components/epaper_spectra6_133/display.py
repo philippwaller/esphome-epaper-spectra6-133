@@ -7,6 +7,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_ID, CONF_LAMBDA
 
 from . import (
+    CONF_AUTO_SLEEP,
     CONF_BUSY_PIN,
     CONF_CHANGE_DETECTION_MODE,
     CONF_CLK_PIN,
@@ -15,6 +16,7 @@ from . import (
     CONF_DATA0_PIN,
     CONF_DATA1_PIN,
     CONF_POWER_PIN,
+    CONF_POWER_OFF_AFTER_SLEEP,
     CONF_RESET_PIN,
     CONF_SPI_HOST,
     CONF_UPDATE_MODE,
@@ -41,22 +43,46 @@ _UPDATE_MODES = {
 
 CONFIG_SCHEMA = display_core.FULL_DISPLAY_SCHEMA.extend(
     {
+        # Component ID used by lambdas and automations to call the public display API.
         cv.GenerateID(): cv.declare_id(EpaperSpectra6133),
+        # ESP-IDF SPI host. Accepts SPI2_HOST, SPI3_HOST, or a raw non-negative
+        # host number; defaults to SPI3_HOST to match the board examples.
         cv.Optional(CONF_SPI_HOST, default="SPI3_HOST"): _validate_spi_host,
+        # Left controller chip-select GPIO. Must be an internal output-capable pin.
         cv.Required(CONF_CS0_PIN): pins.internal_gpio_output_pin_number,
+        # Right controller chip-select GPIO. Must be an internal output-capable pin.
         cv.Required(CONF_CS1_PIN): pins.internal_gpio_output_pin_number,
+        # SPI clock GPIO. Must be an internal output-capable pin.
         cv.Required(CONF_CLK_PIN): pins.internal_gpio_output_pin_number,
+        # SPI MOSI GPIO for the controller data path. Must be output-capable.
         cv.Required(CONF_DATA0_PIN): pins.internal_gpio_output_pin_number,
+        # Secondary SPI data GPIO used by the panel transport. Must be output-capable.
         cv.Required(CONF_DATA1_PIN): pins.internal_gpio_output_pin_number,
+        # Shared panel BUSY GPIO. Must be input-capable; refresh and sleep flows wait
+        # for this signal before issuing timing-sensitive controller commands.
         cv.Required(CONF_BUSY_PIN): pins.internal_gpio_input_pin_number,
+        # Hardware reset GPIO. Must be output-capable and is used during setup and
+        # cold wake after deep sleep.
         cv.Required(CONF_RESET_PIN): pins.internal_gpio_output_pin_number,
+        # Panel load-switch GPIO. Must be output-capable; normally held on and driven
+        # low only after sleep when power_off_after_sleep is enabled.
         cv.Required(CONF_POWER_PIN): pins.internal_gpio_output_pin_number,
+        # Changed-pixel detection for partial update(). Valid values are track
+        # (default, records pixel writes) and compare (frame comparison, extra PSRAM).
         cv.Optional(CONF_CHANGE_DETECTION_MODE, default="track"): cv.one_of(
             *_CHANGE_DETECTION_MODES, lower=True
         ),
+        # Refresh mode used by update(). Valid values are full (default, full frame)
+        # and partial (refresh only the detected changed region).
         cv.Optional(CONF_UPDATE_MODE, default="full"): cv.one_of(
             *_UPDATE_MODES, lower=True
         ),
+        # Boolean. When true (default), successful refresh jobs automatically send
+        # the panel deep-sleep command; the next display operation wakes it first.
+        cv.Optional(CONF_AUTO_SLEEP, default=True): cv.boolean,
+        # Boolean. When true, deep sleep also switches power_pin low after the panel
+        # enters sleep; defaults false because the next operation performs a cold wake.
+        cv.Optional(CONF_POWER_OFF_AFTER_SLEEP, default=False): cv.boolean,
     }
 ).extend(cv.polling_component_schema("never"))
 
@@ -82,6 +108,8 @@ async def to_code(config):
         )
     )
     cg.add(var.set_update_mode(_UPDATE_MODES[config[CONF_UPDATE_MODE]]))
+    cg.add(var.set_auto_sleep(config[CONF_AUTO_SLEEP]))
+    cg.add(var.set_power_off_after_sleep(config[CONF_POWER_OFF_AFTER_SLEEP]))
 
     if CONF_LAMBDA in config:
         lambda_ = await cg.process_lambda(
