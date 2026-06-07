@@ -627,9 +627,9 @@ interval:
 
 ### 10. How deep sleep works
 
-This component automatically sends the panel to deep sleep after every successful refresh. Deep sleep is the normal idle state: it reduces panel-side power consumption while preserving the visible e-paper image.
+This component can automatically send the panel to deep sleep after every successful refresh. Deep sleep is the normal idle state: it reduces panel-side power consumption while preserving the visible e-paper image.
 
-The wake-up path is handled by the component. When you call `update()`, `update_region()`, `flush()`, or `flush_region()` while the panel is sleeping, the component powers the display path, performs a hardware reset, reruns the full initialization sequence, and then transfers the next frame.
+When you call `update()`, `update_region()`, `flush()`, or `flush_region()` while the panel is sleeping, the component powers the display path, performs a hardware reset, reruns the full initialization sequence, and then transfers the next frame.
 
 Most dashboards, clocks, photo frames, and low-frequency status displays should keep the default:
 
