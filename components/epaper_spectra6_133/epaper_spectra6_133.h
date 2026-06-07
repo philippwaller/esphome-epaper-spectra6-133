@@ -203,9 +203,19 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   void set_change_detection_mode(ChangeDetectionMode mode) { this->change_detection_mode_ = mode; }
   /** @brief Sets whether update() performs full-frame or auto-partial refresh. */
   void set_update_mode(UpdateMode mode) { this->update_mode_ = mode; }
-  /** @brief Sets whether successful refreshes automatically enter deep sleep. */
+  /**
+   * @brief Sets whether successful refreshes automatically enter deep sleep.
+   *
+   * @param auto_sleep  True to send the panel deep-sleep command after each
+   * successful refresh; false to leave the panel awake until sleep() is called.
+   */
   void set_auto_sleep(bool auto_sleep) { this->auto_sleep_ = auto_sleep; }
-  /** @brief Sets whether deep sleep also disables the external panel load switch. */
+  /**
+   * @brief Sets whether deep sleep also disables the external panel load switch.
+   *
+   * @param power_off_after_sleep  True to drive power_pin low after the panel
+   * enters deep sleep; false to leave the panel power rail enabled.
+   */
   void set_power_off_after_sleep(bool power_off_after_sleep) { this->power_off_after_sleep_ = power_off_after_sleep; }
 
   /** @brief Allocates the framebuffer and configures the hardware. */
@@ -302,7 +312,12 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
 
   /** @brief Returns whether the panel hardware has been initialized and is ready for explicit updates. */
   bool is_ready() const { return this->controller_.is_initialized(); }
-  /** @brief Returns whether the panel was successfully placed in deep sleep. */
+  /**
+   * @brief Returns whether the panel was successfully placed in deep sleep.
+   *
+   * @return True after the panel has entered deep sleep; false while awake or
+   * while a sleep request is still pending.
+   */
   bool is_sleeping() const { return this->sleeping_; }
 
   // -------------------------------------------------------------------------
@@ -377,7 +392,8 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   /**
    * @brief Wakes a sleeping panel by rerunning the full hardware init sequence.
    *
-   * Returns true when the display is initialized and ready for a new transfer.
+   * @return True when the display is initialized and ready for a new transfer;
+   * false if initialization fails or the component is in a failed state.
    */
   bool wake();
 
