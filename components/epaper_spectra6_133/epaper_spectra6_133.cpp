@@ -253,7 +253,7 @@ void EpaperSpectra6133::sleep() {
     ESP_LOGE(TAG, "Display not ready, cannot schedule sleep");
     return;
   }
-  if (this->sleeping_ && this->async_job_.state == JobState::IDLE) {
+  if (this->sleeping_) {
     return;
   }
   if (!this->controller_.is_initialized() && !this->initialize()) {
