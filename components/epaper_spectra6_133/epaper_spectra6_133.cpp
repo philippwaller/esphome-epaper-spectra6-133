@@ -519,7 +519,7 @@ void EpaperSpectra6133::finish_async_job_() {
     this->controller_.disable_partial_regions();
   }
   this->update_previous_frame_();
-  this->tracked_region_ = {};
+  this->reset_change_tracking();
   this->async_job_ = {};
   ESP_LOGD(TAG, "Async display job completed");
 }
@@ -632,7 +632,7 @@ void EpaperSpectra6133::process_init_stage_() {
     // In track mode, reset the accumulator before running the lambda so we
     // capture only the pixels drawn during this update cycle.
     if (this->change_detection_mode_ == ChangeDetectionMode::TRACK) {
-      this->tracked_region_ = {};
+      this->reset_change_tracking();
     }
     this->do_update_();
   }

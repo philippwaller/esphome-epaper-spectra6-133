@@ -152,8 +152,8 @@ struct UpdateRegion {
  * @brief Compares two full framebuffers and returns the bounding box of all differing pixels.
  *
  * The comparison operates on the nibble-packed framebuffer layout and
- * converts the result back to logical panel coordinates. Uses memcmp per row
- * for fast early-exit detection, then narrows to the exact byte-column range.
+ * converts the result back to logical panel coordinates. It first locates the
+ * changed row range, then narrows to the exact byte-column range inside it.
  *
  * @param current        The newly rendered framebuffer.
  * @param previous_frame The last successfully displayed frame.
