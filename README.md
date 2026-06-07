@@ -659,13 +659,7 @@ button:
       - lambda: id(epd).sleep();
 ```
 
-| Method | Behaviour |
-|--------|-----------|
-| `sleep()` | Schedules a cooperative deep-sleep job. If a hardware refresh is still running, the job waits until BUSY is idle before sending the deep-sleep command. |
-| `wake()` | Wakes a sleeping panel immediately by powering the display path, applying hardware reset, and running the full panel initialization sequence. |
-| `is_sleeping()` | Returns `true` after the panel has successfully entered deep sleep. |
-| `update()` / `update_region()` | Automatically wake the panel when needed, render the lambda, refresh the panel, and then enter deep sleep again when `auto_sleep` is enabled. |
-| `flush()` / `flush_region()` | Automatically wake the panel when needed, refresh from the current framebuffer, and then enter deep sleep again when `auto_sleep` is enabled. |
+When `auto_sleep` is enabled, `update()`, `update_region()`, `flush()`, and `flush_region()` automatically wake a sleeping panel before the operation and return it to deep sleep afterwards. `sleep()` schedules a cooperative deep-sleep job that waits for any in-progress BUSY signal to clear before sending the deep-sleep command. See the [Methods](#methods) table for the full signatures of `sleep()`, `wake()`, and `is_sleeping()`.
 
 `power_off_after_sleep` is a stronger board-level option. It sends the panel deep-sleep command first, then drives `power_pin` low. The next display operation turns power back on and performs a cold wake. Keep this disabled unless your hardware has been verified with the external load switch off.
 
