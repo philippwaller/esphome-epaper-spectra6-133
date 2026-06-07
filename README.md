@@ -270,6 +270,7 @@ Values in your device YAML can override package defaults. In particular, substit
 
 If your board revision or wiring uses different pins, define the affected substitutions in your own YAML:
 
+<!-- x-release-please-start-version -->
 ```yaml
 substitutions:
   epd_busy_pin: "7"
@@ -277,8 +278,9 @@ substitutions:
   epd_power_pin: "45"
 
 packages:
-  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/goo_display/esp32_133c02.yaml@v0.1.2
+  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/goo_display/esp32_133c02.yaml@v0.2.0
 ```
+<!-- x-release-please-end -->
 
 Keep overrides close to the top of your file so it is obvious which hardware assumptions differ from the package.
 
