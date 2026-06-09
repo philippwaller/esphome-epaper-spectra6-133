@@ -26,8 +26,13 @@ binary_sensor:
     id: epaper_spectra6_133_update_available
     entity_category: diagnostic
     lambda: |-
-      if (id(epaper_spectra6_133_latest_version).state.empty()) return false;
-      return id(epaper_spectra6_133_latest_version).state != id(epaper_spectra6_133_current_version).state;
+      const auto &latest = id(epaper_spectra6_133_latest_version).state;
+      const auto &current = id(epaper_spectra6_133_current_version).state;
+      if (latest.empty() || current.empty()) return false;
+      int lmaj = 0, lmin = 0, lpat = 0, cmaj = 0, cmin = 0, cpat = 0;
+      if (sscanf(latest.c_str(), "%d.%d.%d", &lmaj, &lmin, &lpat) != 3) return false;
+      if (sscanf(current.c_str(), "%d.%d.%d", &cmaj, &cmin, &cpat) != 3) return false;
+      return lmaj > cmaj || (lmaj == cmaj && (lmin > cmin || (lmin == cmin && lpat > cpat)));
 
 script:
   - id: epaper_spectra6_133_check_for_updates
@@ -46,6 +51,13 @@ script:
                         if (!tag.empty() && tag[0] == 'v') tag = tag.substr(1);
                         if (!tag.empty()) id(epaper_spectra6_133_latest_version).publish_state(tag);
                       });
+
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      - delay: 30s
+      - script.execute: epaper_spectra6_133_check_for_updates
 
 interval:
   - interval: 6h
