@@ -175,7 +175,7 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   static constexpr Color GREEN = Color(0, 255, 0);
 
   /** @brief Returns the component version string. */
-  static const char *version() { return VERSION; }
+  static const char *get_version() { return VERSION; }
 
   /**
    * @brief Creates the component and binds the controller to the transport.
