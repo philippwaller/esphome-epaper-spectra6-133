@@ -1,0 +1,66 @@
+---
+# Optional package: periodically checks GitHub for a newer component release.
+# Include in your config with:
+#   packages:
+#     update_check: !include ../packages/update_check.yaml
+
+http_request:
+
+text_sensor:
+  - platform: template
+    name: "Component Version"
+    id: epaper_spectra6_133_current_version
+    entity_category: diagnostic
+    lambda: 'return std::string(esphome::epaper_spectra6_133::VERSION);'
+    update_interval: never
+
+  - platform: template
+    name: "Latest Version"
+    id: epaper_spectra6_133_latest_version
+    entity_category: diagnostic
+    update_interval: never
+
+binary_sensor:
+  - platform: template
+    name: "Update Available"
+    id: epaper_spectra6_133_update_available
+    entity_category: diagnostic
+    lambda: |-
+      const auto &latest = id(epaper_spectra6_133_latest_version).state;
+      const auto &current = id(epaper_spectra6_133_current_version).state;
+      if (latest.empty() || current.empty()) return false;
+      int lmaj = 0, lmin = 0, lpat = 0, cmaj = 0, cmin = 0, cpat = 0;
+      if (sscanf(latest.c_str(), "%d.%d.%d", &lmaj, &lmin, &lpat) != 3) return false;
+      if (sscanf(current.c_str(), "%d.%d.%d", &cmaj, &cmin, &cpat) != 3) return false;
+      return lmaj > cmaj || (lmaj == cmaj && (lmin > cmin || (lmin == cmin && lpat > cpat)));
+
+script:
+  - id: epaper_spectra6_133_check_for_updates
+    then:
+      - http_request.get:
+          capture_response: true
+          url: https://api.github.com/repos/philippwaller/esphome-epaper-spectra6-133/releases/latest
+          on_response:
+            - if:
+                condition:
+                  lambda: 'return response->status_code == 200;'
+                then:
+                  - lambda: |-
+                      json::parse_json(body, [](JsonObject root) -> bool {
+                        std::string tag = root["tag_name"] | "";
+                        if (!tag.empty() && tag[0] == 'v') tag = tag.substr(1);
+                        if (!tag.empty()) id(epaper_spectra6_133_latest_version).publish_state(tag);
+                        return true;
+                      });
+
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      - delay: 30s
+      - script.execute: epaper_spectra6_133_check_for_updates
+
+interval:
+  - interval: 6h
+    then:
+      - script.execute: epaper_spectra6_133_check_for_updates

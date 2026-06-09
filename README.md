@@ -344,6 +344,7 @@ Use this local form only when the package file is present next to your ESPHome Y
 | `sleep()` | Schedules the panel to enter deep sleep |
 | `wake()` | Reinitialises a sleeping panel immediately |
 | `cancel()` | Cancels the current or pending display job where it is safe to do so |
+| `get_version()` | Returns the component version string (static) |
 
 ---
 
@@ -664,6 +665,64 @@ button:
 When `auto_sleep` is enabled, `update()`, `update_region()`, `flush()`, and `flush_region()` automatically wake a sleeping panel before the operation and return it to deep sleep afterwards. `sleep()` schedules a cooperative deep-sleep job that waits for any in-progress BUSY signal to clear before sending the deep-sleep command. See the [Methods](#methods) table for the full signatures of `sleep()`, `wake()`, and `is_sleeping()`.
 
 `power_off_after_sleep` is a stronger board-level option. It sends the panel deep-sleep command first, then drives `power_pin` low. The next display operation turns power back on and performs a cold wake. Keep this disabled unless your hardware has been verified with the external load switch off.
+
+---
+
+### 11. Access the component version at runtime
+
+The component exposes its release version as a compile-time constant. Use it for diagnostics, on-device display, or custom update checks.
+
+In a display lambda:
+
+```yaml
+lambda: |-
+  it.printf(10, 10, id(font_small), Color(0, 0, 0), "v%s",
+            id(epd).get_version());
+```
+
+As a Home Assistant text sensor:
+
+```yaml
+text_sensor:
+  - platform: template
+    name: "Component Version"
+    entity_category: diagnostic
+    lambda: 'return std::string(esphome::epaper_spectra6_133::VERSION);'
+    update_interval: never
+```
+
+The version is also logged during startup in the `dump_config()` output.
+
+### 12. Check for component updates
+
+This repository includes an optional package that periodically queries the latest GitHub release and compares it against the installed version. It exposes three Home Assistant diagnostic entities:
+
+| Entity | Type | Description |
+|--------|------|-------------|
+| Component Version | text_sensor | Currently installed version |
+| Latest Version | text_sensor | Most recent release on GitHub |
+| Update Available | binary_sensor | `true` when a newer release exists |
+
+The check runs every 6 hours and requires no additional configuration beyond including the package.
+
+Add the package to your configuration:
+
+```yaml
+packages:
+  update_check: !include ../packages/update_check.yaml
+```
+
+Or fetch it directly from GitHub:
+
+<!-- x-release-please-start-version -->
+```yaml
+packages:
+  update_check: github://philippwaller/esphome-epaper-spectra6-133/packages/update_check.yaml@v0.2.0
+```
+<!-- x-release-please-end -->
+
+> [!NOTE]
+> The component itself never performs network requests. The update check is entirely optional and runs through ESPHome's standard `http_request` component. It fetches only the latest release metadata from the GitHub API and does not transmit any device or usage data.
 
 ---
 

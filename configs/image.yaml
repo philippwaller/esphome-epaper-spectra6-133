@@ -9,6 +9,7 @@ substitutions:
 
 packages:
   board: !include ../packages/boards/goo_display/esp32_133c02.yaml
+  update_check: !include ../packages/update_check.yaml
 
 esphome:
   name: ${device_name}
