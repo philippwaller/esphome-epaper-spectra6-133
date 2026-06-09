@@ -79,7 +79,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/philippwaller/esphome-epaper-spectra6-133
-      ref: v0.2.0
+      ref: v0.3.0
 ```
 <!-- x-release-please-end -->
 
@@ -154,7 +154,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/philippwaller/esphome-epaper-spectra6-133
-      ref: v0.2.0
+      ref: v0.3.0
 
 font:
   - file: gfonts://Bebas Neue
@@ -219,7 +219,7 @@ Add the custom component as shown in the [Quick Start](#-quick-start) section. T
 <!-- x-release-please-start-version -->
 ```yaml
 packages:
-  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/<package-path>@v0.2.0
+  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/<package-path>@v0.3.0
 ```
 <!-- x-release-please-end -->
 
@@ -228,7 +228,7 @@ For example, for the Goo Display ESP32-133C02:
 <!-- x-release-please-start-version -->
 ```yaml
 packages:
-  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/goo_display/esp32_133c02.yaml@v0.2.0
+  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/goo_display/esp32_133c02.yaml@v0.3.0
 ```
 <!-- x-release-please-end -->
 
@@ -278,7 +278,7 @@ substitutions:
   epd_power_pin: "45"
 
 packages:
-  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/goo_display/esp32_133c02.yaml@v0.2.0
+  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/goo_display/esp32_133c02.yaml@v0.3.0
 ```
 <!-- x-release-please-end -->
 
@@ -717,7 +717,7 @@ Or fetch it directly from GitHub:
 <!-- x-release-please-start-version -->
 ```yaml
 packages:
-  update_check: github://philippwaller/esphome-epaper-spectra6-133/packages/update_check.yaml@v0.2.0
+  update_check: github://philippwaller/esphome-epaper-spectra6-133/packages/update_check.yaml@v0.3.0
 ```
 <!-- x-release-please-end -->
 

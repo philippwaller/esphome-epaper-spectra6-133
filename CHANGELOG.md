@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.2.0...v0.3.0) (2026-06-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* **display:** make clear only fill the framebuffer ([#55](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/55))
+
+### 🚀 Features
+
+* Add optional update check package ([#54](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/54)) ([009d6ee](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/009d6ee23188edb79ea2381827242ac9191bd324))
+* **display:** Expose component version via public API ([#52](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/52)) ([7bdb1f5](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/7bdb1f55b14624a618c55507eed1f3556e65edbe))
+
+
+### 🐛 Bug Fixes
+
+* **display:** Make clear only fill the framebuffer ([#55](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/55)) ([f9897b4](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/f9897b49808e34204a04c3adfde7a9a15499f4e8))
+
 ## [0.2.0](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.1.2...v0.2.0) (2026-06-07)
 
 
