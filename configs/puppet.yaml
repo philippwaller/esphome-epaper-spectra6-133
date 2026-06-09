@@ -1,0 +1,601 @@
+---
+# Example: Home Assistant dashboard via Puppet with deep sleep.
+#
+# This example downloads a rendered dashboard image from Puppet, displays it on
+# a 13.3" Spectra 6 ePaper panel, and puts the ESP32 into deep sleep until the
+# next refresh cycle. The device reboots on every wake — all state that must
+# survive sleep is stored in NVS via restore_value globals.
+#
+# Puppet (https://github.com/balloob/home-assistant-addons) renders Home Assistant
+# dashboards as images suitable for ePaper displays. This config fetches the image
+# over HTTP and draws it full-screen.
+#
+# Home Assistant helper entities can optionally control the Puppet URL, refresh
+# interval, retry interval, keep-awake mode, and visible error pages. If those
+# helpers do not exist or Home Assistant is unreachable, the device continues
+# with the compiled-in defaults defined in the substitutions section below.
+
+substitutions:
+  # --- Device identity (change these first) ---
+  device_name: spectra6-puppet
+  friendly_name: Spectra 6 Puppet
+
+  # --- Puppet image URL ---
+  # Replace with the URL your Puppet instance serves. The viewport should match
+  # the display resolution (1200x1600). Use format=bmp for best compatibility.
+  puppet_url: "http://10.10.0.100:10000/lovelace/0?viewport=1200x1600&colors=000000%2CFFFFFF%2C0000FF%2C00FF00%2CFF0000%2CFFFF00&palette_colors=000000%2CFFFFFF%2C0000FF%2C00FF00%2CFF0000%2CFFFF00&dithering=sierra-lite&format=bmp&zoom=1.6&wait=2000&lang=de&next=120"
+
+  # --- Timing defaults ---
+  # Refresh interval after a successful image download (minutes).
+  default_sleep_minutes: "1"
+  # Retry interval after a failed download (minutes). Shorter to recover faster.
+  default_retry_minutes: "1"
+
+  # --- Error display ---
+  # Number of consecutive failures before rendering a visible error page.
+  error_threshold: "3"
+
+  # --- Optional Home Assistant helper entity IDs ---
+  # Set these to match your HA helper entities. If the entity does not exist or
+  # HA is unreachable, the device uses the compiled-in defaults above.
+  ha_puppet_url_entity: input_text.puppet_url
+  ha_refresh_interval_entity: input_number.puppet_refresh_minutes
+  ha_retry_interval_entity: input_number.puppet_retry_minutes
+  ha_keep_awake_entity: input_boolean.puppet_keep_awake
+  ha_visible_errors_entity: input_boolean.puppet_visible_errors
+
+packages:
+  board: !include ../packages/boards/goo_display/esp32_133c02.yaml
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  platformio_options:
+    board_build.psram: enabled
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: main_lifecycle
+
+logger:
+  level: DEBUG
+  logs:
+    epaper_spectra6_133: DEBUG
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: ${friendly_name}
+    password: !secret ap_password
+
+captive_portal:
+
+external_components:
+  - source:
+      # Local source used by this repository for development and CI.
+      type: local
+      path: ../components
+
+      # In your own ESPHome config, use the released GitHub version instead:
+      # type: git
+      # url: https://github.com/philippwaller/esphome-epaper-spectra6-133
+      # ref: v0.2.0  # x-release-please-version
+
+http_request:
+  timeout: 30s
+  watchdog_timeout: 30s
+
+deep_sleep:
+  id: deep_sleep_control
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Berlin
+
+globals:
+  # --- Download state (reset every boot) ---
+  - id: download_done
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  - id: download_success
+    type: bool
+    restore_value: false
+    initial_value: "false"
+
+  # --- Failure counter (persists across deep sleep via NVS) ---
+  - id: consecutive_failures
+    type: int
+    restore_value: true
+    initial_value: "0"
+
+  # --- Runtime state (reset every boot) ---
+  - id: cycle_start_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: display_updated
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  - id: sleep_duration_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: "1800000"
+
+online_image:
+  - id: puppet_dashboard_image
+    url: ${puppet_url}
+    format: BMP
+    type: RGB
+    resize: 1200x1600
+    update_interval: never
+    on_download_finished:
+      - globals.set:
+          id: download_success
+          value: "true"
+      - globals.set:
+          id: download_done
+          value: "true"
+    on_error:
+      - logger.log:
+          level: ERROR
+          format: "Puppet image download failed"
+      - globals.set:
+          id: download_success
+          value: "false"
+      - globals.set:
+          id: download_done
+          value: "true"
+
+font:
+  - file: "gfonts://JetBrains Mono@500"
+    id: font_headline
+    size: 48
+    glyphs: "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ "
+
+  - file: "gfonts://JetBrains Mono@300"
+    id: font_body
+    size: 28
+    glyphs: "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ "
+
+display:
+  - platform: epaper_spectra6_133
+    id: epaper_display
+    update_interval: never
+    auto_clear_enabled: false
+    cs0_pin: ${epd_cs0_pin}
+    cs1_pin: ${epd_cs1_pin}
+    clk_pin: ${epd_clk_pin}
+    data0_pin: ${epd_data0_pin}
+    data1_pin: ${epd_data1_pin}
+    busy_pin: ${epd_busy_pin}
+    reset_pin: ${epd_reset_pin}
+    power_pin: ${epd_power_pin}
+    pages:
+      - id: page_dashboard
+        lambda: |-
+          it.image(0, 0, id(puppet_dashboard_image));
+
+      - id: page_wifi_setup
+        lambda: |-
+          const int cx = it.get_width() / 2;
+          const int cy = it.get_height() / 2;
+          const Color black(0, 0, 0);
+          const Color white(255, 255, 255);
+          const Color blue(0, 0, 255);
+
+          it.fill(white);
+
+          it.print(cx, cy - 80, id(font_headline), black, TextAlign::CENTER,
+                   "WIFI SETUP");
+          it.filled_rectangle(cx - 120, cy - 40, 240, 4, blue);
+          it.print(cx, cy, id(font_body), black, TextAlign::TOP_CENTER,
+                   "Connect to WiFi network:");
+          it.printf(cx, cy + 40, id(font_body), black, TextAlign::TOP_CENTER,
+                    "\"%s\"", "${friendly_name}");
+          it.print(cx, cy + 100, id(font_body), black, TextAlign::TOP_CENTER,
+                   "Then open 192.168.4.1");
+          it.print(cx, cy + 140, id(font_body), black, TextAlign::TOP_CENTER,
+                   "in your browser.");
+
+      - id: page_wifi_error
+        lambda: |-
+          const int cx = it.get_width() / 2;
+          const int cy = it.get_height() / 2;
+          const Color black(0, 0, 0);
+          const Color white(255, 255, 255);
+          const Color red(255, 0, 0);
+
+          it.fill(white);
+
+          it.print(cx, cy - 80, id(font_headline), black, TextAlign::CENTER,
+                   "WIFI ERROR");
+          it.filled_rectangle(cx - 120, cy - 40, 240, 4, red);
+          it.print(cx, cy, id(font_body), black, TextAlign::TOP_CENTER,
+                   "Could not connect to WiFi.");
+          it.print(cx, cy + 40, id(font_body), black, TextAlign::TOP_CENTER,
+                   "Check network or credentials.");
+          it.print(cx, cy + 100, id(font_body), black, TextAlign::TOP_CENTER,
+                   "Fallback AP available:");
+          it.printf(cx, cy + 140, id(font_body), black, TextAlign::TOP_CENTER,
+                    "\"%s\"", "${friendly_name}");
+
+      - id: page_puppet_error
+        lambda: |-
+          const int cx = it.get_width() / 2;
+          const int cy = it.get_height() / 2;
+          const Color black(0, 0, 0);
+          const Color white(255, 255, 255);
+          const Color red(255, 0, 0);
+
+          it.fill(white);
+
+          it.print(cx, cy - 80, id(font_headline), black, TextAlign::CENTER,
+                   "DASHBOARD UNAVAILABLE");
+          it.filled_rectangle(cx - 180, cy - 40, 360, 4, red);
+          it.printf(cx, cy, id(font_body), black, TextAlign::TOP_CENTER,
+                    "Failed %d consecutive times.", id(consecutive_failures));
+          it.print(cx, cy + 60, id(font_body), black, TextAlign::TOP_CENTER,
+                   "Check that Puppet and");
+          it.print(cx, cy + 100, id(font_body), black, TextAlign::TOP_CENTER,
+                   "Home Assistant are running.");
+
+      - id: page_maintenance
+        lambda: |-
+          const int cx = it.get_width() / 2;
+          const int cy = it.get_height() / 2;
+          const Color black(0, 0, 0);
+          const Color white(255, 255, 255);
+          const Color blue(0, 0, 255);
+
+          it.fill(white);
+
+          it.print(cx, cy - 80, id(font_headline), black, TextAlign::CENTER,
+                   "KEEP AWAKE");
+          it.filled_rectangle(cx - 120, cy - 40, 240, 4, blue);
+          it.print(cx, cy, id(font_body), black, TextAlign::TOP_CENTER,
+                   "Device will not enter deep sleep.");
+          it.print(cx, cy + 40, id(font_body), black, TextAlign::TOP_CENTER,
+                   "OTA updates and debugging available.");
+          it.print(cx, cy + 100, id(font_body), black, TextAlign::TOP_CENTER,
+                   "Disable keep-awake in Home Assistant");
+          it.print(cx, cy + 140, id(font_body), black, TextAlign::TOP_CENTER,
+                   "to resume normal operation.");
+
+script:
+  - id: main_lifecycle
+    then:
+      # Phase 1: Prevent deep sleep until the lifecycle completes.
+      - deep_sleep.prevent: deep_sleep_control
+      - lambda: "id(cycle_start_ms) = millis();"
+      - logger.log:
+          level: INFO
+          format: "Lifecycle: starting (consecutive failures: %d)"
+          args: ["id(consecutive_failures)"]
+
+      # Phase 2: Wait for WiFi.
+      - wait_until:
+          condition:
+            wifi.connected:
+          timeout: 90s
+
+      - if:
+          condition:
+            not:
+              wifi.connected:
+          then:
+            - logger.log:
+                level: ERROR
+                format: "Lifecycle: WiFi connection timeout"
+            - if:
+                condition:
+                  lambda: |-
+                    #ifdef USE_CAPTIVE_PORTAL
+                    return captive_portal::global_captive_portal != nullptr &&
+                           captive_portal::global_captive_portal->is_active();
+                    #else
+                    return false;
+                    #endif
+                then:
+                  - logger.log:
+                      level: INFO
+                      format: "Lifecycle: captive portal active — showing setup page, staying awake"
+                  - display.page.show: page_wifi_setup
+                  - component.update: epaper_display
+                  # Do not sleep — user needs the AP for configuration.
+                  - script.stop: main_lifecycle
+                else:
+                  - logger.log:
+                      level: WARN
+                      format: "Lifecycle: no captive portal — showing WiFi error, sleeping"
+                  - display.page.show: page_wifi_error
+                  - component.update: epaper_display
+                  - globals.set:
+                      id: display_updated
+                      value: "true"
+                  - wait_until:
+                      condition:
+                        lambda: "return !id(epaper_display).is_busy();"
+                      timeout: 90s
+                  - text_sensor.template.publish:
+                      id: last_refresh_status
+                      state: "wifi_failed"
+                  - lambda: |-
+                      id(sleep_duration_ms) = ${default_retry_minutes} * 60 * 1000;
+                  - deep_sleep.allow: deep_sleep_control
+                  - deep_sleep.enter:
+                      id: deep_sleep_control
+                      sleep_duration: !lambda "return id(sleep_duration_ms);"
+
+      # Phase 3: Wait for Home Assistant API (optional, proceed without it).
+      - logger.log:
+          level: INFO
+          format: "Lifecycle: WiFi connected, waiting for API"
+      - wait_until:
+          condition:
+            api.connected:
+          timeout: 30s
+
+      - if:
+          condition:
+            api.connected:
+          then:
+            - logger.log:
+                level: INFO
+                format: "Lifecycle: API connected, waiting for helper states"
+            - delay: 2s
+          else:
+            - logger.log:
+                level: WARN
+                format: "Lifecycle: API timeout — proceeding with defaults"
+
+      # Phase 4: Read configuration from HA helpers (with defaults).
+      - lambda: |-
+          // Refresh interval
+          float ha_refresh = id(ha_refresh_interval_min).state;
+          int refresh_min = ${default_sleep_minutes};
+          if (!std::isnan(ha_refresh) && ha_refresh >= 5.0f) {
+            refresh_min = static_cast<int>(ha_refresh);
+          }
+
+          // Retry interval
+          float ha_retry = id(ha_retry_interval_min).state;
+          int retry_min = ${default_retry_minutes};
+          if (!std::isnan(ha_retry) && ha_retry >= 2.0f) {
+            retry_min = static_cast<int>(ha_retry);
+          }
+
+          // Store default sleep duration (will be overridden on failure)
+          id(sleep_duration_ms) = refresh_min * 60 * 1000;
+
+          // Puppet URL override
+          std::string ha_url = id(ha_puppet_url).state;
+          if (!ha_url.empty() && ha_url != "unknown" && ha_url != "unavailable") {
+            id(puppet_dashboard_image).set_url(ha_url);
+            ESP_LOGI("puppet", "Using HA puppet URL: %s", ha_url.c_str());
+          } else {
+            ESP_LOGI("puppet", "Using default puppet URL");
+          }
+
+          ESP_LOGI("puppet", "Refresh: %d min, Retry: %d min", refresh_min, retry_min);
+
+      # Phase 5: Download the Puppet image.
+      - logger.log:
+          level: INFO
+          format: "Lifecycle: starting image download"
+      - globals.set:
+          id: download_done
+          value: "false"
+      - globals.set:
+          id: download_success
+          value: "false"
+      - component.update: puppet_dashboard_image
+      - wait_until:
+          condition:
+            lambda: "return id(download_done);"
+          timeout: 60s
+
+      # Phase 6: Evaluate download result and select page.
+      - if:
+          condition:
+            lambda: "return id(download_done) && id(download_success);"
+          then:
+            - logger.log:
+                level: INFO
+                format: "Lifecycle: download succeeded"
+            - globals.set:
+                id: consecutive_failures
+                value: "0"
+            - display.page.show: page_dashboard
+            - component.update: epaper_display
+            - globals.set:
+                id: display_updated
+                value: "true"
+            - text_sensor.template.publish:
+                id: last_refresh_status
+                state: "success"
+          else:
+            # Download failed or timed out.
+            - lambda: |-
+                id(consecutive_failures) += 1;
+                ESP_LOGW("puppet", "Download failed (consecutive: %d)", id(consecutive_failures));
+
+                // Use retry interval on failure
+                float ha_retry = id(ha_retry_interval_min).state;
+                int retry_min = ${default_retry_minutes};
+                if (!std::isnan(ha_retry) && ha_retry >= 2.0f) {
+                  retry_min = static_cast<int>(ha_retry);
+                }
+                id(sleep_duration_ms) = retry_min * 60 * 1000;
+            - text_sensor.template.publish:
+                id: last_refresh_status
+                state: "download_failed"
+            # Show error page only if threshold reached and visible errors enabled.
+            - if:
+                condition:
+                  lambda: |-
+                    bool visible = true;
+                    if (id(ha_visible_errors).has_state()) {
+                      visible = id(ha_visible_errors).state;
+                    }
+                    return visible && id(consecutive_failures) >= ${error_threshold};
+                then:
+                  - logger.log:
+                      level: WARN
+                      format: "Lifecycle: showing error page (threshold reached)"
+                  - display.page.show: page_puppet_error
+                  - component.update: epaper_display
+                  - globals.set:
+                      id: display_updated
+                      value: "true"
+                else:
+                  - logger.log:
+                      level: INFO
+                      format: "Lifecycle: keeping previous display content"
+
+      # Phase 7: Wait for display refresh to complete (if triggered).
+      - if:
+          condition:
+            lambda: "return id(display_updated);"
+          then:
+            - logger.log:
+                level: INFO
+                format: "Lifecycle: waiting for display refresh"
+            - wait_until:
+                condition:
+                  lambda: "return !id(epaper_display).is_busy();"
+                timeout: 90s
+            - logger.log:
+                level: INFO
+                format: "Lifecycle: display refresh complete"
+
+      # Phase 8: Publish status and compute next wake.
+      - lambda: |-
+          uint32_t cycle_ms = millis() - id(cycle_start_ms);
+          uint32_t sleep_s = id(sleep_duration_ms) / 1000;
+          ESP_LOGI("puppet", "Cycle completed in %.1f s — next wake in %u s",
+                   cycle_ms / 1000.0f, sleep_s);
+
+      - sensor.template.publish:
+          id: cycle_duration
+          state: !lambda "return (millis() - id(cycle_start_ms)) / 1000.0f;"
+      - sensor.template.publish:
+          id: next_refresh_in_minutes
+          state: !lambda "return id(sleep_duration_ms) / 60000.0f;"
+      - sensor.template.publish:
+          id: failure_count
+          state: !lambda "return id(consecutive_failures);"
+
+      # Phase 9: Check keep-awake mode.
+      - if:
+          condition:
+            lambda: |-
+              if (id(ha_keep_awake).has_state()) {
+                return id(ha_keep_awake).state;
+              }
+              return false;
+          then:
+            - logger.log:
+                level: INFO
+                format: "Lifecycle: keep-awake enabled — staying awake"
+            - if:
+                condition:
+                  lambda: "return !id(display_updated);"
+                then:
+                  - display.page.show: page_maintenance
+                  - component.update: epaper_display
+            - script.stop: main_lifecycle
+
+      # Phase 10: Enter deep sleep.
+      - logger.log:
+          level: INFO
+          format: "Lifecycle: entering deep sleep"
+      - deep_sleep.allow: deep_sleep_control
+      - deep_sleep.enter:
+          id: deep_sleep_control
+          sleep_duration: !lambda "return id(sleep_duration_ms);"
+
+text_sensor:
+  # --- HA helper input: Puppet image URL ---
+  - platform: homeassistant
+    id: ha_puppet_url
+    entity_id: ${ha_puppet_url_entity}
+    internal: true
+
+  # --- Status output: last refresh result ---
+  - platform: template
+    name: "Last Refresh Status"
+    id: last_refresh_status
+    entity_category: diagnostic
+    update_interval: never
+
+sensor:
+  # --- HA helper input: refresh interval (minutes) ---
+  - platform: homeassistant
+    id: ha_refresh_interval_min
+    entity_id: ${ha_refresh_interval_entity}
+    internal: true
+
+  # --- HA helper input: retry interval (minutes) ---
+  - platform: homeassistant
+    id: ha_retry_interval_min
+    entity_id: ${ha_retry_interval_entity}
+    internal: true
+
+  # --- Status output: cycle duration (seconds from boot to sleep) ---
+  - platform: template
+    name: "Cycle Duration"
+    id: cycle_duration
+    unit_of_measurement: s
+    entity_category: diagnostic
+    accuracy_decimals: 1
+    update_interval: never
+
+  # --- Status output: next refresh in minutes ---
+  - platform: template
+    name: "Next Refresh In"
+    id: next_refresh_in_minutes
+    unit_of_measurement: min
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    update_interval: never
+
+  # --- Status output: consecutive failure count ---
+  - platform: template
+    name: "Consecutive Failures"
+    id: failure_count
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    update_interval: never
+
+binary_sensor:
+  # --- HA helper input: keep awake toggle ---
+  - platform: homeassistant
+    id: ha_keep_awake
+    entity_id: ${ha_keep_awake_entity}
+    internal: true
+
+  # --- HA helper input: visible error pages toggle ---
+  - platform: homeassistant
+    id: ha_visible_errors
+    entity_id: ${ha_visible_errors_entity}
+    internal: true
+
+button:
+  # Manual refresh — useful when device is in keep-awake mode.
+  - platform: template
+    name: "Refresh Dashboard"
+    entity_category: config
+    on_press:
+      - script.execute: main_lifecycle
