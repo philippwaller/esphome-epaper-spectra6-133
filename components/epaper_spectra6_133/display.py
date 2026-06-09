@@ -10,6 +10,7 @@ from . import (
     CONF_AUTO_SLEEP,
     CONF_BUSY_PIN,
     CONF_CHANGE_DETECTION_MODE,
+    CONF_CLEAR_COLOR,
     CONF_CLK_PIN,
     CONF_CS0_PIN,
     CONF_CS1_PIN,
@@ -39,6 +40,17 @@ _CHANGE_DETECTION_MODES = {
 _UPDATE_MODES = {
     "full": cg.RawExpression("esphome::epaper_spectra6_133::UpdateMode::FULL"),
     "partial": cg.RawExpression("esphome::epaper_spectra6_133::UpdateMode::PARTIAL"),
+}
+
+_CLEAR_COLORS = {
+    "black": cg.RawExpression("esphome::epaper_spectra6_133::EpaperSpectra6133::BLACK"),
+    "white": cg.RawExpression("esphome::epaper_spectra6_133::EpaperSpectra6133::WHITE"),
+    "yellow": cg.RawExpression(
+        "esphome::epaper_spectra6_133::EpaperSpectra6133::YELLOW"
+    ),
+    "red": cg.RawExpression("esphome::epaper_spectra6_133::EpaperSpectra6133::RED"),
+    "blue": cg.RawExpression("esphome::epaper_spectra6_133::EpaperSpectra6133::BLUE"),
+    "green": cg.RawExpression("esphome::epaper_spectra6_133::EpaperSpectra6133::GREEN"),
 }
 
 CONFIG_SCHEMA = display_core.FULL_DISPLAY_SCHEMA.extend(
@@ -77,6 +89,11 @@ CONFIG_SCHEMA = display_core.FULL_DISPLAY_SCHEMA.extend(
         cv.Optional(CONF_UPDATE_MODE, default="full"): cv.one_of(
             *_UPDATE_MODES, lower=True
         ),
+        # Colour used by clear() and ESPHome's auto_clear_enabled pre-render
+        # clear. Limited to the panel palette; defaults to white for e-paper.
+        cv.Optional(CONF_CLEAR_COLOR, default="white"): cv.one_of(
+            *_CLEAR_COLORS, lower=True
+        ),
         # Boolean. When true (default), successful refresh jobs automatically send
         # the panel deep-sleep command; the next display operation wakes it first.
         cv.Optional(CONF_AUTO_SLEEP, default=True): cv.boolean,
@@ -108,6 +125,7 @@ async def to_code(config):
         )
     )
     cg.add(var.set_update_mode(_UPDATE_MODES[config[CONF_UPDATE_MODE]]))
+    cg.add(var.set_clear_color(_CLEAR_COLORS[config[CONF_CLEAR_COLOR]]))
     cg.add(var.set_auto_sleep(config[CONF_AUTO_SLEEP]))
     cg.add(var.set_power_off_after_sleep(config[CONF_POWER_OFF_AFTER_SLEEP]))
 

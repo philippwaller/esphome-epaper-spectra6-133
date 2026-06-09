@@ -111,6 +111,18 @@ class EpaperSpectra6133ComponentTest : public ::testing::Test {
   bool pending_has_pending() const { return display_.pending_job_.has_pending; }
   AsyncJobType pending_type() const { return display_.pending_job_.type; }
   bool is_in_hw_refresh_stage() const { return display_.is_in_hw_refresh_stage_(); }
+  bool buffer_is_filled_with(uint8_t color_code) const {
+    const uint8_t packed = static_cast<uint8_t>((color_code << 4) | color_code);
+    if (display_.buffer_ == nullptr) {
+      return false;
+    }
+    for (size_t i = 0; i < FULL_FRAME_SIZE; i++) {
+      if (display_.buffer_[i] != packed) {
+        return false;
+      }
+    }
+    return true;
+  }
   test_support::TransportState &transport_state() {
     return test_support::transport_state(display_.transport_);
   }
@@ -400,9 +412,9 @@ TEST_F(EpaperSpectra6133ComponentTest, IsBusyReturnsFalseWhenIdle) {
 }
 
 // ---------------------------------------------------------------------------
-// 17. clear() fills the framebuffer and schedules a FLUSH job.
+// 17. clear() fills the framebuffer without scheduling a refresh.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, ClearFillsBufferAndSchedulesFlush) {
+TEST_F(EpaperSpectra6133ComponentTest, ClearFillsBufferWithoutRefresh) {
   // Write a non-white sentinel into the buffer before calling clear().
   if (display_.buffer_ != nullptr) {
     std::memset(display_.buffer_, 0x00, FULL_FRAME_SIZE);  // all black
@@ -410,25 +422,14 @@ TEST_F(EpaperSpectra6133ComponentTest, ClearFillsBufferAndSchedulesFlush) {
 
   display_.clear();
 
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::FLUSH);
-
-  // Buffer should now be filled with the white nibble (0x11 = two white pixels).
-  if (display_.buffer_ != nullptr) {
-    bool all_white = true;
-    for (size_t i = 0; i < FULL_FRAME_SIZE; i++) {
-      if (display_.buffer_[i] != 0x11) {
-        all_white = false;
-        break;
-      }
-    }
-    EXPECT_TRUE(all_white);
-  }
+  EXPECT_FALSE(display_.is_busy());
+  EXPECT_EQ(job_type(), AsyncJobType::NONE);
+  EXPECT_TRUE(buffer_is_filled_with(COLOR_WHITE));
 }
 
 // Dispatch through the base DisplayBuffer API to verify the display's white
 // default clear colour is preserved by the override.
-TEST_F(EpaperSpectra6133ComponentTest, BaseClassClearDispatchUsesWhite) {
+TEST_F(EpaperSpectra6133ComponentTest, BaseClassClearDispatchUsesWhiteWithoutRefresh) {
   if (display_.buffer_ != nullptr) {
     std::memset(display_.buffer_, 0x00, FULL_FRAME_SIZE);  // all black
   }
@@ -437,19 +438,22 @@ TEST_F(EpaperSpectra6133ComponentTest, BaseClassClearDispatchUsesWhite) {
   esphome::display::DisplayBuffer *base_display = &display_;
   base_display->clear();
 
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::FLUSH);
+  EXPECT_FALSE(display_.is_busy());
+  EXPECT_EQ(job_type(), AsyncJobType::NONE);
+  EXPECT_TRUE(buffer_is_filled_with(COLOR_WHITE));
+}
 
+TEST_F(EpaperSpectra6133ComponentTest, ClearUsesConfiguredClearColor) {
   if (display_.buffer_ != nullptr) {
-    bool all_white = true;
-    for (size_t i = 0; i < FULL_FRAME_SIZE; i++) {
-      if (display_.buffer_[i] != 0x11) {
-        all_white = false;
-        break;
-      }
-    }
-    EXPECT_TRUE(all_white);
+    std::memset(display_.buffer_, 0x11, FULL_FRAME_SIZE);  // all white
   }
+
+  display_.set_clear_color(EpaperSpectra6133::BLUE);
+  display_.clear();
+
+  EXPECT_FALSE(display_.is_busy());
+  EXPECT_EQ(job_type(), AsyncJobType::NONE);
+  EXPECT_TRUE(buffer_is_filled_with(COLOR_BLUE));
 }
 
 TEST_F(EpaperSpectra6133ComponentTest, SleepSchedulesJobAndMarksDisplaySleeping) {

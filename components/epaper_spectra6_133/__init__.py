@@ -15,6 +15,7 @@ CONF_RESET_PIN = "reset_pin"
 CONF_POWER_PIN = "power_pin"
 CONF_CHANGE_DETECTION_MODE = "change_detection_mode"
 CONF_UPDATE_MODE = "update_mode"
+CONF_CLEAR_COLOR = "clear_color"
 CONF_AUTO_SLEEP = "auto_sleep"
 CONF_POWER_OFF_AFTER_SLEEP = "power_off_after_sleep"
 

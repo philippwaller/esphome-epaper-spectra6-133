@@ -308,8 +308,8 @@ BENCHMARK_CAPTURE(BM_DrawPipeline, contained_overdraw_mixed_rgb, make_mixed_pixe
 /**
  * Benchmarks filling the full framebuffer with one packed panel color.
  *
- * This is the fast path used by full refresh preparation and explicit
- * clear(color) calls. Each capture supplies one real Spectra 6 palette code.
+ * This is the fast path used by full refresh preparation and framebuffer
+ * clears. Each capture supplies one real Spectra 6 palette code.
  *
  * @param color_code 4-bit panel palette code used for every pixel.
  */

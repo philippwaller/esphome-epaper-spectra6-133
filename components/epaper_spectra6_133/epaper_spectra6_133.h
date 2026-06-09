@@ -207,6 +207,8 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   void set_change_detection_mode(ChangeDetectionMode mode) { this->change_detection_mode_ = mode; }
   /** @brief Sets whether update() performs full-frame or auto-partial refresh. */
   void set_update_mode(UpdateMode mode) { this->update_mode_ = mode; }
+  /** @brief Sets the colour used by clear() and ESPHome's automatic pre-render clear. */
+  void set_clear_color(Color color) { this->clear_color_ = color; }
   /**
    * @brief Sets whether successful refreshes automatically enter deep sleep.
    *
@@ -250,27 +252,8 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   /** @brief Reports that this display exposes a multi-colour output surface. */
   display::DisplayType get_display_type() override { return display::DISPLAY_TYPE_COLOR; }
 
-  /**
-   * @brief Clears the framebuffer to white and schedules a full-frame flush.
-   *
-   * Overrides the inherited display clear behaviour so clear() uses white as
-   * the panel's default background state instead of black.
-   */
+  /** @brief Fills the framebuffer with the configured clear colour without refreshing. */
   void clear() override;
-
-  /**
-   * @brief Clears the framebuffer to a specific colour and schedules a full-frame flush.
-   *
-   * Maps @p color to the nearest panel colour, fills the framebuffer
-   * uniformly, and schedules a full-frame flush job that is progressed
-   * cooperatively from loop().
-   *
-   * If another display operation is already in progress it is superseded:
-   * the previous job is cancelled and this one takes its place.
-   *
-   * @param color  ESPHome Color to clear to.
-   */
-  void clear(Color color);
 
   /**
    * @brief Schedules a partial update of a logical rectangle and returns immediately.
@@ -455,6 +438,7 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   Controller controller_;
   ChangeDetectionMode change_detection_mode_{ChangeDetectionMode::TRACK};
   UpdateMode update_mode_{UpdateMode::FULL};
+  Color clear_color_{WHITE};
   bool auto_sleep_{true};
   bool power_off_after_sleep_{false};
   bool sleeping_{false};
