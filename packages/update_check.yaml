@@ -1,0 +1,53 @@
+---
+# Optional package: periodically checks GitHub for a newer component release.
+# Include in your config with:
+#   packages:
+#     update_check: !include ../packages/update_check.yaml
+
+http_request:
+
+text_sensor:
+  - platform: template
+    name: "Component Version"
+    id: epaper_spectra6_133_current_version
+    entity_category: diagnostic
+    lambda: 'return std::string(esphome::epaper_spectra6_133::VERSION);'
+    update_interval: never
+
+  - platform: template
+    name: "Latest Version"
+    id: epaper_spectra6_133_latest_version
+    entity_category: diagnostic
+    update_interval: never
+
+binary_sensor:
+  - platform: template
+    name: "Update Available"
+    id: epaper_spectra6_133_update_available
+    entity_category: diagnostic
+    lambda: |-
+      if (id(epaper_spectra6_133_latest_version).state.empty()) return false;
+      return id(epaper_spectra6_133_latest_version).state != id(epaper_spectra6_133_current_version).state;
+
+script:
+  - id: epaper_spectra6_133_check_for_updates
+    then:
+      - http_request.get:
+          capture_response: true
+          url: https://api.github.com/repos/philippwaller/esphome-epaper-spectra6-133/releases/latest
+          on_response:
+            - if:
+                condition:
+                  lambda: 'return response->status_code == 200;'
+                then:
+                  - lambda: |-
+                      json::parse_json(body, [](JsonObject root) {
+                        std::string tag = root["tag_name"] | "";
+                        if (!tag.empty() && tag[0] == 'v') tag = tag.substr(1);
+                        if (!tag.empty()) id(epaper_spectra6_133_latest_version).publish_state(tag);
+                      });
+
+interval:
+  - interval: 6h
+    then:
+      - script.execute: epaper_spectra6_133_check_for_updates
