@@ -46,10 +46,11 @@ script:
                   lambda: 'return response->status_code == 200;'
                 then:
                   - lambda: |-
-                      json::parse_json(body, [](JsonObject root) {
+                      json::parse_json(body, [](JsonObject root) -> bool {
                         std::string tag = root["tag_name"] | "";
                         if (!tag.empty() && tag[0] == 'v') tag = tag.substr(1);
                         if (!tag.empty()) id(epaper_spectra6_133_latest_version).publish_state(tag);
+                        return true;
                       });
 
 esphome:
