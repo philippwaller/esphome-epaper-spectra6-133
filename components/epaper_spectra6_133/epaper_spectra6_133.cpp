@@ -93,6 +93,7 @@ void EpaperSpectra6133::setup() {
  */
 void EpaperSpectra6133::dump_config() {
   ESP_LOGCONFIG(TAG, "epaper_spectra6_133:");
+  ESP_LOGCONFIG(TAG, "  Version: %s", VERSION);
   ESP_LOGCONFIG(TAG, "  Resolution: %dx%d", EPD_WIDTH, EPD_HEIGHT);
   ESP_LOGCONFIG(TAG, "  SPI host: %d (SPI3_HOST=2)", static_cast<int>(this->transport_.spi_host()));
   ESP_LOGCONFIG(TAG, "  CS0 pin: %d", this->transport_.cs0_pin());

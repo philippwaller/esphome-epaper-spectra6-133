@@ -28,6 +28,11 @@
 namespace esphome {
 namespace epaper_spectra6_133 {
 
+TEST(Version, IsNonEmptyAndContainsDot) {
+  EXPECT_GT(std::strlen(VERSION), 0);
+  EXPECT_NE(std::string(VERSION).find('.'), std::string::npos);
+}
+
 namespace {
 
 size_t count_register_writes(const std::vector<test_support::Operation> &operations, uint8_t command) {

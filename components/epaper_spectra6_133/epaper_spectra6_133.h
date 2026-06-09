@@ -25,6 +25,7 @@
 
 #include "epaper_spectra6_133_controller.h"
 #include "epaper_spectra6_133_framebuffer.h"
+#include "epaper_spectra6_133_version.h"
 
 namespace esphome {
 namespace epaper_spectra6_133 {
@@ -172,6 +173,9 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   static constexpr Color RED = Color(255, 0, 0);
   static constexpr Color BLUE = Color(0, 0, 255);
   static constexpr Color GREEN = Color(0, 255, 0);
+
+  /** @brief Returns the component version string. */
+  static const char *get_version() { return VERSION; }
 
   /**
    * @brief Creates the component and binds the controller to the transport.
