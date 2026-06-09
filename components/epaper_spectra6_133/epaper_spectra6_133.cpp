@@ -108,6 +108,8 @@ void EpaperSpectra6133::dump_config() {
   ESP_LOGCONFIG(TAG, "  Change detection mode: %s",
                 this->change_detection_mode_ == ChangeDetectionMode::COMPARE ? "compare" : "track");
   ESP_LOGCONFIG(TAG, "  Update mode: %s", this->update_mode_ == UpdateMode::PARTIAL ? "partial" : "full");
+  ESP_LOGCONFIG(TAG, "  Clear color: rgb(%u, %u, %u)", this->clear_color_.red, this->clear_color_.green,
+                this->clear_color_.blue);
   ESP_LOGCONFIG(TAG, "  Auto sleep: %s", this->auto_sleep_ ? "yes" : "no");
   ESP_LOGCONFIG(TAG, "  Power off after sleep: %s", this->power_off_after_sleep_ ? "yes" : "no");
   ESP_LOGCONFIG(
@@ -182,16 +184,7 @@ bool EpaperSpectra6133::initialize() {
   return true;
 }
 
-void EpaperSpectra6133::clear() { this->clear(WHITE); }
-
-void EpaperSpectra6133::clear(Color color) {
-  fill_buffer_with_code(this->buffer_, color_to_code(color));
-  if (!this->ensure_initialized_()) {
-    ESP_LOGE(TAG, "Display not ready, cannot schedule clear");
-    return;
-  }
-  this->schedule_async_job_(AsyncJobType::FLUSH, 0, 0, 0, 0);
-}
+void EpaperSpectra6133::clear() { fill_buffer_with_code(this->buffer_, color_to_code(this->clear_color_)); }
 
 /**
  * @brief Schedules a partial update of a logical rectangle and returns immediately.

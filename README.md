@@ -320,7 +320,8 @@ Use this local form only when the package file is present next to your ESPHome Y
 | `auto_sleep` | bool | `true` | Send the panel deep-sleep command after each successful refresh |
 | `power_off_after_sleep` | bool | `false` | Also switch `power_pin` low after the panel has entered deep sleep |
 | `update_interval` | time | `never` | How often to re-render the display. Use `never` to update only on demand. Accepts values like `30s`, `5min`, `1h`. |
-| `auto_clear_enabled` | bool | `true` | Fill the canvas with white before the lambda runs on each `update()` call. Has no effect on `flush()` or `flush_region()`. |
+| `clear_color` | string | `white` | Colour used by `clear()` and by `auto_clear_enabled`. Valid values: `black`, `white`, `yellow`, `red`, `blue`, `green`. |
+| `auto_clear_enabled` | bool | `true` | Fill the canvas with `clear_color` before the lambda runs on each `update()` call. Has no effect on `flush()` or `flush_region()`. |
 | `lambda` | lambda | — | Drawing code that runs on every `update()` call. Receives the display as `it`. Use `it.print()`, `it.filled_rectangle()`, `it.image()`, etc. to compose the screen. |
 | `pages` | list | — | Standard ESPHome [display pages](https://esphome.io/components/display/#pages) |
 
@@ -334,8 +335,7 @@ Use this local form only when the package file is present next to your ESPHome Y
 | `flush()` | Refreshes the display from the current framebuffer without running the lambda |
 | `flush_region(x, y, w, h)` | Refreshes the specified rectangle from the current framebuffer without running the lambda |
 | `fill(color)` | Fills the framebuffer with a colour; does not refresh the display |
-| `clear()` | Fills the framebuffer with white and schedules a full refresh |
-| `clear(color)` | Fills the framebuffer with the given colour and schedules a full refresh |
+| `clear()` | Fills the framebuffer with `clear_color`; does not refresh the display |
 | `detect_changed_region()` | Returns the currently detected changed rectangle |
 | `reset_change_tracking()` | Clears the accumulated changed rectangle |
 | `is_busy()` | Returns `true` while a display job is active or waiting to run |
@@ -361,7 +361,7 @@ display:
       it.print(600, 800, id(my_font), Color(0, 0, 0), TextAlign::CENTER, "Hello!");
 ```
 
-With the default setting `auto_clear_enabled: true`, the framebuffer is cleared to white before the lambda runs. Each update therefore starts from a clean canvas instead of drawing on top of the previous frame.
+With the default setting `auto_clear_enabled: true`, the framebuffer is cleared to `clear_color` before the lambda runs. The default `clear_color` is `white`, so each update starts from a clean e-paper canvas instead of drawing on top of the previous frame.
 
 ### 2. Draw with the standard ESPHome display API
 
@@ -482,7 +482,7 @@ display:
 In this mode, the changed region comes from the pixels touched by drawing operations. This works best when the lambda only redraws the area that really changed.
 
 > [!WARNING]
-> The config option `auto_clear_enabled: true` fills every pixel with white before each render, which expands the tracked region to the full screen and defeats partial updates.
+> The config option `auto_clear_enabled: true` fills every pixel with `clear_color` before each render, which expands the tracked region to the full screen and defeats partial updates.
 
 For real partial updates in `track` mode, disable automatic clearing and redraw only the changed area:
 
@@ -532,7 +532,7 @@ Only one display job can be active at a time. Starting a new job supersedes the 
 
 ### 7. Draw directly, then push the framebuffer
 
-`fill()`, `print()`, `image()`, and the other drawing functions modify the framebuffer in memory. They do not necessarily refresh the physical panel by themselves. After drawing directly on the component, use `flush()` or `flush_region()` to send the current framebuffer to the display.
+`clear()`, `fill()`, `print()`, `image()`, and the other drawing functions modify the framebuffer in memory. They do not refresh the physical panel by themselves. After drawing directly on the component, use `flush()` or `flush_region()` to send the current framebuffer to the display.
 
 Use `flush()` when the complete framebuffer should be transferred:
 
