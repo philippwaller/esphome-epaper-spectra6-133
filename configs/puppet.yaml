@@ -55,6 +55,7 @@ esphome:
   on_boot:
     priority: -100
     then:
+      - script.execute: publish_restored_lifecycle_status
       - script.execute: main_lifecycle
 
 logger:
@@ -88,11 +89,11 @@ external_components:
       # In your own ESPHome config, use the released GitHub version instead:
       # type: git
       # url: https://github.com/philippwaller/esphome-epaper-spectra6-133
-      # ref: v0.2.0  # x-release-please-version
+      # ref: v0.3.0  # x-release-please-version
 
 http_request:
-  timeout: 30s
-  watchdog_timeout: 30s
+  timeout: 60s
+  watchdog_timeout: 60s
 
 deep_sleep:
   id: deep_sleep_control
@@ -118,6 +119,24 @@ globals:
     type: int
     restore_value: true
     initial_value: "0"
+  - id: lifecycle_status_valid
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: last_cycle_duration_s
+    type: float
+    restore_value: true
+    initial_value: "0.0f"
+  - id: last_refresh_status_value
+    type: std::string
+    restore_value: true
+    max_restore_data_length: 32
+    initial_value: '"unknown"'
+  - id: next_refresh_at_value
+    type: std::string
+    restore_value: true
+    max_restore_data_length: 16
+    initial_value: '"unknown"'
 
   # --- Runtime state (reset every boot) ---
   - id: cycle_start_ms
@@ -328,11 +347,13 @@ script:
                       condition:
                         lambda: "return !id(epaper_display).is_busy();"
                       timeout: 90s
-                  - text_sensor.template.publish:
-                      id: last_refresh_status
-                      state: "wifi_failed"
+                  - globals.set:
+                      id: last_refresh_status_value
+                      value: '"wifi_failed"'
                   - lambda: |-
                       id(sleep_duration_ms) = ${default_retry_minutes} * 60 * 1000;
+                  - script.execute: publish_lifecycle_status
+                  - script.wait: publish_lifecycle_status
                   - deep_sleep.allow: deep_sleep_control
                   - deep_sleep.enter:
                       id: deep_sleep_control
@@ -422,9 +443,9 @@ script:
             - globals.set:
                 id: display_updated
                 value: "true"
-            - text_sensor.template.publish:
-                id: last_refresh_status
-                state: "success"
+            - globals.set:
+                id: last_refresh_status_value
+                value: '"success"'
           else:
             # Download failed or timed out.
             - lambda: |-
@@ -438,9 +459,9 @@ script:
                   retry_min = static_cast<int>(ha_retry);
                 }
                 id(sleep_duration_ms) = retry_min * 60 * 1000;
-            - text_sensor.template.publish:
-                id: last_refresh_status
-                state: "download_failed"
+            - globals.set:
+                id: last_refresh_status_value
+                value: '"download_failed"'
             # Show error page only if threshold reached and visible errors enabled.
             - if:
                 condition:
@@ -481,21 +502,8 @@ script:
                 format: "Lifecycle: display refresh complete"
 
       # Phase 8: Publish status and compute next wake.
-      - lambda: |-
-          uint32_t cycle_ms = millis() - id(cycle_start_ms);
-          uint32_t sleep_s = id(sleep_duration_ms) / 1000;
-          ESP_LOGI("puppet", "Cycle completed in %.1f s — next wake in %u s",
-                   cycle_ms / 1000.0f, sleep_s);
-
-      - sensor.template.publish:
-          id: cycle_duration
-          state: !lambda "return (millis() - id(cycle_start_ms)) / 1000.0f;"
-      - sensor.template.publish:
-          id: next_refresh_in_minutes
-          state: !lambda "return id(sleep_duration_ms) / 60000.0f;"
-      - sensor.template.publish:
-          id: failure_count
-          state: !lambda "return id(consecutive_failures);"
+      - script.execute: publish_lifecycle_status
+      - script.wait: publish_lifecycle_status
 
       # Phase 9: Check keep-awake mode.
       - if:
@@ -526,6 +534,65 @@ script:
           id: deep_sleep_control
           sleep_duration: !lambda "return id(sleep_duration_ms);"
 
+  - id: publish_lifecycle_status
+    then:
+      - lambda: |-
+          uint32_t cycle_ms = millis() - id(cycle_start_ms);
+          uint32_t sleep_s = id(sleep_duration_ms) / 1000;
+          id(last_cycle_duration_s) = cycle_ms / 1000.0f;
+
+          auto now = id(sntp_time).now();
+          if (now.is_valid()) {
+            auto next_wake = esphome::ESPTime::from_epoch_local(now.timestamp + sleep_s);
+            id(next_refresh_at_value) = next_wake.strftime("%H:%M");
+            ESP_LOGI("puppet", "Cycle completed in %.1f s — next wake at %s",
+                     id(last_cycle_duration_s), id(next_refresh_at_value).c_str());
+          } else {
+            id(next_refresh_at_value) = "unknown";
+            ESP_LOGI("puppet", "Cycle completed in %.1f s — next wake in %u s",
+                     id(last_cycle_duration_s), sleep_s);
+          }
+          id(lifecycle_status_valid) = true;
+
+      - sensor.template.publish:
+          id: cycle_duration
+          state: !lambda "return id(last_cycle_duration_s);"
+      - text_sensor.template.publish:
+          id: last_refresh_status
+          state: !lambda "return id(last_refresh_status_value);"
+      - text_sensor.template.publish:
+          id: next_refresh_at
+          state: !lambda "return id(next_refresh_at_value);"
+      - sensor.template.publish:
+          id: failure_count
+          state: !lambda "return id(consecutive_failures);"
+      - if:
+          condition:
+            api.connected:
+          then:
+            # Give the native API time to deliver manually published template
+            # sensor states before the ESP32 disconnects for deep sleep.
+            - delay: 3s
+
+  - id: publish_restored_lifecycle_status
+    then:
+      - if:
+          condition:
+            lambda: "return id(lifecycle_status_valid);"
+          then:
+            - sensor.template.publish:
+                id: cycle_duration
+                state: !lambda "return id(last_cycle_duration_s);"
+            - text_sensor.template.publish:
+                id: last_refresh_status
+                state: !lambda "return id(last_refresh_status_value);"
+            - text_sensor.template.publish:
+                id: next_refresh_at
+                state: !lambda "return id(next_refresh_at_value);"
+            - sensor.template.publish:
+                id: failure_count
+                state: !lambda "return id(consecutive_failures);"
+
 text_sensor:
   # --- HA helper input: Puppet image URL ---
   - platform: homeassistant
@@ -537,6 +604,13 @@ text_sensor:
   - platform: template
     name: "Last Refresh Status"
     id: last_refresh_status
+    entity_category: diagnostic
+    update_interval: never
+
+  # --- Status output: next refresh local time ---
+  - platform: template
+    name: "Next Refresh At"
+    id: next_refresh_at
     entity_category: diagnostic
     update_interval: never
 
@@ -560,15 +634,6 @@ sensor:
     unit_of_measurement: s
     entity_category: diagnostic
     accuracy_decimals: 1
-    update_interval: never
-
-  # --- Status output: next refresh in minutes ---
-  - platform: template
-    name: "Next Refresh In"
-    id: next_refresh_in_minutes
-    unit_of_measurement: min
-    entity_category: diagnostic
-    accuracy_decimals: 0
     update_interval: never
 
   # --- Status output: consecutive failure count ---
