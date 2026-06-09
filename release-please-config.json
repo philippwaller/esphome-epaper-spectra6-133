@@ -24,7 +24,8 @@
         { "type": "generic", "path": "configs/hello-world.yaml" },
         { "type": "generic", "path": "configs/image.yaml" },
         { "type": "generic", "path": "configs/clock.yaml" },
-        { "type": "generic", "path": "configs/test-sheet.yaml" }
+        { "type": "generic", "path": "configs/test-sheet.yaml" },
+        { "type": "generic", "path": "components/epaper_spectra6_133/epaper_spectra6_133_version.h" }
       ]
     }
   }
