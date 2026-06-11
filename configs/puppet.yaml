@@ -23,13 +23,15 @@ substitutions:
   # --- Puppet image URL ---
   # Replace with the URL your Puppet instance serves. The viewport should match
   # the display resolution (1200x1600). Use format=bmp for best compatibility.
-  puppet_url: "http://10.10.0.100:10000/lovelace/0?viewport=1200x1600&colors=000000%2CFFFFFF%2C0000FF%2C00FF00%2CFF0000%2CFFFF00&palette_colors=000000%2CFFFFFF%2C0000FF%2C00FF00%2CFF0000%2CFFFF00&dithering=sierra-lite&format=bmp&zoom=1.6&wait=2000&lang=de&next=120"
+  # Plain HTTP is intended for trusted LAN deployments. Use HTTPS or an
+  # authenticated reverse proxy if Puppet is reachable outside your local network.
+  puppet_url: "http://10.10.0.100:10000/lovelace/epaper?viewport=1200x1600&colors=000000%2CFFFFFF%2C0000FF%2C00FF00%2CFF0000%2CFFFF00&palette_colors=000000%2CFFFFFF%2C0000FF%2C00FF00%2CFF0000%2CFFFF00&dithering=floyd-steinberg&format=bmp&zoom=2&wait=3000&lang=de&next=300"
 
   # --- Timing defaults ---
   # Refresh interval after a successful image download (minutes).
-  default_sleep_minutes: "1"
+  default_sleep_minutes: "5"
   # Retry interval after a failed download (minutes). Shorter to recover faster.
-  default_retry_minutes: "1"
+  default_retry_minutes: "2"
 
   # --- Error display ---
   # Number of consecutive failures before rendering a visible error page.
@@ -59,9 +61,10 @@ esphome:
       - script.execute: main_lifecycle
 
 logger:
-  level: DEBUG
+  # Set these to DEBUG temporarily when diagnosing panel or lifecycle issues.
+  level: INFO
   logs:
-    epaper_spectra6_133: DEBUG
+    epaper_spectra6_133: INFO
 
 api:
   encryption:
@@ -127,6 +130,10 @@ globals:
     type: float
     restore_value: true
     initial_value: "0.0f"
+  - id: last_display_cycle_duration_s
+    type: float
+    restore_value: true
+    initial_value: "0.0f"
   - id: last_refresh_status_value
     type: std::string
     restore_value: true
@@ -147,8 +154,12 @@ globals:
     type: bool
     restore_value: false
     initial_value: "false"
-  - id: sleep_duration_ms
+  - id: display_refresh_start_ms
     type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: sleep_duration_ms
+    type: uint64_t
     restore_value: false
     initial_value: "1800000"
 
@@ -156,7 +167,7 @@ online_image:
   - id: puppet_dashboard_image
     url: ${puppet_url}
     format: BMP
-    type: RGB
+    type: RGB565
     resize: 1200x1600
     update_interval: never
     on_download_finished:
@@ -339,6 +350,7 @@ script:
                       level: WARN
                       format: "Lifecycle: no captive portal — showing WiFi error, sleeping"
                   - display.page.show: page_wifi_error
+                  - lambda: "id(display_refresh_start_ms) = millis();"
                   - component.update: epaper_display
                   - globals.set:
                       id: display_updated
@@ -346,12 +358,23 @@ script:
                   - wait_until:
                       condition:
                         lambda: "return !id(epaper_display).is_busy();"
-                      timeout: 90s
-                  - globals.set:
-                      id: last_refresh_status_value
-                      value: '"wifi_failed"'
+                      timeout: 120s
                   - lambda: |-
-                      id(sleep_duration_ms) = ${default_retry_minutes} * 60 * 1000;
+                      id(consecutive_failures) += 1;
+                      if (id(display_refresh_start_ms) != 0) {
+                        id(last_display_cycle_duration_s) =
+                            (millis() - id(display_refresh_start_ms)) / 1000.0f;
+                        id(display_refresh_start_ms) = 0;
+                      }
+                      if (id(epaper_display).is_busy()) {
+                        id(last_refresh_status_value) = "display_timeout";
+                        ESP_LOGE("puppet", "Display refresh timed out after WiFi failure");
+                      } else {
+                        id(last_refresh_status_value) = "wifi_failed";
+                      }
+                      id(sleep_duration_ms) =
+                          static_cast<uint64_t>(${default_retry_minutes}) * 60ULL * 1000ULL;
+                      ESP_LOGW("puppet", "WiFi failed (consecutive: %d)", id(consecutive_failures));
                   - script.execute: publish_lifecycle_status
                   - script.wait: publish_lifecycle_status
                   - deep_sleep.allow: deep_sleep_control
@@ -386,25 +409,30 @@ script:
           // Refresh interval
           float ha_refresh = id(ha_refresh_interval_min).state;
           int refresh_min = ${default_sleep_minutes};
-          if (!std::isnan(ha_refresh) && ha_refresh >= 5.0f) {
+          if (!std::isnan(ha_refresh)) {
             refresh_min = static_cast<int>(ha_refresh);
           }
 
           // Retry interval
           float ha_retry = id(ha_retry_interval_min).state;
           int retry_min = ${default_retry_minutes};
-          if (!std::isnan(ha_retry) && ha_retry >= 2.0f) {
+          if (!std::isnan(ha_retry)) {
             retry_min = static_cast<int>(ha_retry);
           }
 
           // Store default sleep duration (will be overridden on failure)
-          id(sleep_duration_ms) = refresh_min * 60 * 1000;
+          id(sleep_duration_ms) = static_cast<uint64_t>(refresh_min) * 60ULL * 1000ULL;
 
           // Puppet URL override
           std::string ha_url = id(ha_puppet_url).state;
           if (!ha_url.empty() && ha_url != "unknown" && ha_url != "unavailable") {
-            id(puppet_dashboard_image).set_url(ha_url);
-            ESP_LOGI("puppet", "Using HA puppet URL: %s", ha_url.c_str());
+            if (ha_url.rfind("http://", 0) == 0 || ha_url.rfind("https://", 0) == 0) {
+              id(puppet_dashboard_image).set_url(ha_url);
+              ESP_LOGI("puppet", "Using HA puppet URL: %s", ha_url.c_str());
+            } else {
+              ESP_LOGW("puppet", "Ignoring invalid HA puppet URL: %s", ha_url.c_str());
+              ESP_LOGI("puppet", "Using default puppet URL");
+            }
           } else {
             ESP_LOGI("puppet", "Using default puppet URL");
           }
@@ -425,7 +453,7 @@ script:
       - wait_until:
           condition:
             lambda: "return id(download_done);"
-          timeout: 60s
+          timeout: 70s
 
       # Phase 6: Evaluate download result and select page.
       - if:
@@ -439,6 +467,7 @@ script:
                 id: consecutive_failures
                 value: "0"
             - display.page.show: page_dashboard
+            - lambda: "id(display_refresh_start_ms) = millis();"
             - component.update: epaper_display
             - globals.set:
                 id: display_updated
@@ -455,10 +484,10 @@ script:
                 // Use retry interval on failure
                 float ha_retry = id(ha_retry_interval_min).state;
                 int retry_min = ${default_retry_minutes};
-                if (!std::isnan(ha_retry) && ha_retry >= 2.0f) {
+                if (!std::isnan(ha_retry)) {
                   retry_min = static_cast<int>(ha_retry);
                 }
-                id(sleep_duration_ms) = retry_min * 60 * 1000;
+                id(sleep_duration_ms) = static_cast<uint64_t>(retry_min) * 60ULL * 1000ULL;
             - globals.set:
                 id: last_refresh_status_value
                 value: '"download_failed"'
@@ -476,6 +505,7 @@ script:
                       level: WARN
                       format: "Lifecycle: showing error page (threshold reached)"
                   - display.page.show: page_puppet_error
+                  - lambda: "id(display_refresh_start_ms) = millis();"
                   - component.update: epaper_display
                   - globals.set:
                       id: display_updated
@@ -496,10 +526,19 @@ script:
             - wait_until:
                 condition:
                   lambda: "return !id(epaper_display).is_busy();"
-                timeout: 90s
-            - logger.log:
-                level: INFO
-                format: "Lifecycle: display refresh complete"
+                timeout: 120s
+            - lambda: |-
+                if (id(display_refresh_start_ms) != 0) {
+                  id(last_display_cycle_duration_s) =
+                      (millis() - id(display_refresh_start_ms)) / 1000.0f;
+                  id(display_refresh_start_ms) = 0;
+                }
+                if (id(epaper_display).is_busy()) {
+                  id(last_refresh_status_value) = "display_timeout";
+                  ESP_LOGE("puppet", "Display refresh timed out");
+                } else {
+                  ESP_LOGI("puppet", "Display refresh complete");
+                }
 
       # Phase 8: Publish status and compute next wake.
       - script.execute: publish_lifecycle_status
@@ -522,7 +561,29 @@ script:
                   lambda: "return !id(display_updated);"
                 then:
                   - display.page.show: page_maintenance
+                  - lambda: "id(display_refresh_start_ms) = millis();"
                   - component.update: epaper_display
+                  - globals.set:
+                      id: display_updated
+                      value: "true"
+                  - wait_until:
+                      condition:
+                        lambda: "return !id(epaper_display).is_busy();"
+                      timeout: 120s
+                  - lambda: |-
+                      if (id(display_refresh_start_ms) != 0) {
+                        id(last_display_cycle_duration_s) =
+                            (millis() - id(display_refresh_start_ms)) / 1000.0f;
+                        id(display_refresh_start_ms) = 0;
+                      }
+                      if (id(epaper_display).is_busy()) {
+                        id(last_refresh_status_value) = "display_timeout";
+                        ESP_LOGE("puppet", "Display refresh timed out in keep-awake mode");
+                      } else {
+                        ESP_LOGI("puppet", "Maintenance page refresh complete");
+                      }
+                  - script.execute: publish_lifecycle_status
+                  - script.wait: publish_lifecycle_status
             - script.stop: main_lifecycle
 
       # Phase 10: Enter deep sleep.
@@ -538,7 +599,7 @@ script:
     then:
       - lambda: |-
           uint32_t cycle_ms = millis() - id(cycle_start_ms);
-          uint32_t sleep_s = id(sleep_duration_ms) / 1000;
+          uint64_t sleep_s = id(sleep_duration_ms) / 1000ULL;
           id(last_cycle_duration_s) = cycle_ms / 1000.0f;
 
           auto now = id(sntp_time).now();
@@ -549,14 +610,17 @@ script:
                      id(last_cycle_duration_s), id(next_refresh_at_value).c_str());
           } else {
             id(next_refresh_at_value) = "unknown";
-            ESP_LOGI("puppet", "Cycle completed in %.1f s — next wake in %u s",
-                     id(last_cycle_duration_s), sleep_s);
+            ESP_LOGI("puppet", "Cycle completed in %.1f s — next wake in %llu s",
+                     id(last_cycle_duration_s), static_cast<unsigned long long>(sleep_s));
           }
           id(lifecycle_status_valid) = true;
 
       - sensor.template.publish:
           id: cycle_duration
           state: !lambda "return id(last_cycle_duration_s);"
+      - sensor.template.publish:
+          id: display_cycle_duration
+          state: !lambda "return id(last_display_cycle_duration_s);"
       - text_sensor.template.publish:
           id: last_refresh_status
           state: !lambda "return id(last_refresh_status_value);"
@@ -583,6 +647,9 @@ script:
             - sensor.template.publish:
                 id: cycle_duration
                 state: !lambda "return id(last_cycle_duration_s);"
+            - sensor.template.publish:
+                id: display_cycle_duration
+                state: !lambda "return id(last_display_cycle_duration_s);"
             - text_sensor.template.publish:
                 id: last_refresh_status
                 state: !lambda "return id(last_refresh_status_value);"
@@ -636,6 +703,15 @@ sensor:
     accuracy_decimals: 1
     update_interval: never
 
+  # --- Status output: last display refresh duration ---
+  - platform: template
+    name: "Display Cycle Duration"
+    id: display_cycle_duration
+    unit_of_measurement: s
+    entity_category: diagnostic
+    accuracy_decimals: 1
+    update_interval: never
+
   # --- Status output: consecutive failure count ---
   - platform: template
     name: "Consecutive Failures"
@@ -645,6 +721,11 @@ sensor:
     update_interval: never
 
 binary_sensor:
+  # --- Live status: ESPHome API availability ---
+  - platform: status
+    name: "ESP Running"
+    entity_category: diagnostic
+
   # --- HA helper input: keep awake toggle ---
   - platform: homeassistant
     id: ha_keep_awake
