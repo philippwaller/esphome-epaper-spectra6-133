@@ -198,7 +198,7 @@ bool Controller::init_panel() {
  * This follows the same PON -> DRF -> POF order used by the reference
  * implementation and waits for BUSY to return high after each step.
  * Delegates each command to the step-based send_refresh_*() primitives
- * so the async path can reuse the same underlying operations.
+ * so the cooperative operation path can reuse the same underlying operations.
  */
 bool Controller::refresh() {
   if (!this->send_refresh_pon()) {
@@ -228,7 +228,7 @@ bool Controller::refresh() {
  *
  * Each controller half receives one contiguous 300-byte slice per row,
  * with watchdog feeds and short delays inserted between rows.
- * Uses the step-based begin/write/end primitives so the async path
+ * Uses the step-based begin/write/end primitives so the cooperative operation path
  * can reuse the same streaming logic.
  */
 bool Controller::transfer_full_frame(const uint8_t *framebuffer) {
@@ -316,7 +316,7 @@ bool Controller::transfer_region(const uint8_t *framebuffer, int x, int y, int w
   // sequence so that the partial region is active while pixel data
   // is clocked in. ICs without changes are skipped here and handled
   // in Phase 2 below.  Uses the step-based begin/write/end primitives
-  // so the async path can reuse the same streaming logic.
+  // so the cooperative operation path can reuse the same streaming logic.
   for (size_t index = 0; index < 2; index++) {
     if (!has_region[index]) {
       continue;
@@ -409,7 +409,7 @@ bool Controller::probe_drivers() {
 
 // =============================================================================
 // Step-based primitives — used by both the blocking API above and the
-// component's async cooperative loop() implementation.
+// component's cooperative display operation loop() implementation.
 // =============================================================================
 
 /**
@@ -547,7 +547,7 @@ bool Controller::arm_dummy_region(uint8_t cs_index) {
  * @brief Fills @p out[2] and @p has_region[2] with aligned PartialRegion descriptors.
  *
  * Exposes the anonymous-namespace build_partial_region() so that callers
- * outside this translation unit (e.g. the async stage INIT handler) can
+ * outside this translation unit (e.g. the operation INIT stage handler) can
  * compute the per-IC regions without duplicating alignment logic.
  */
 void Controller::compute_partial_regions(int x, int y, int width, int height, PartialRegion out[2],

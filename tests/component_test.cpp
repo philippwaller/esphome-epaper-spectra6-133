@@ -11,9 +11,9 @@
 
 /**
  * @file component_test.cpp
- * @brief Host-test suite for the async display operation state machine.
+ * @brief Host-test suite for the cooperative display operation state machine.
  *
- * These tests verify the cooperative async API (schedule, cancel, busy state,
+ * These tests verify the cooperative display operation API (schedule, cancel, processing state,
  * replacement semantics) without requiring real SPI hardware.  The Transport
  * layer is replaced by the existing stub that records operations and returns
  * configurable results.
@@ -81,35 +81,35 @@ class EpaperSpectra6133ComponentTest : public ::testing::Test {
     g_mock_timer_us = 0;
 
     // Pre-initialise the controller so ensure_initialized_() returns true
-    // without going through hardware init.  This lets update_async() and
-    // friends schedule jobs without blocking on GPIO/SPI setup.
+    // without going through hardware init. This lets update(), refresh(),
+    // refresh_region(), and sleep() schedule operations without GPIO/SPI setup.
     display_.controller_.init_panel();
 
     // Allocate the framebuffer (same path as setup() but without GPIO/SPI).
     display_.init_internal_(FULL_FRAME_SIZE);
   }
 
-  // Drain the async loop until the job completes or the step limit is exceeded.
+  // Drain the cooperative operation loop until the operation completes or the step limit is exceeded.
   // g_mock_timer_us is advanced by 1 s each step so that all delay stages
   // (30 ms post-PON, 10/300 ms post-refresh) expire on the very next call
   // after their start time is recorded.
   void run_loop_until_done(int max_steps = 50000) {
-    for (int step = 0; step < max_steps && display_.is_busy(); step++) {
+    for (int step = 0; step < max_steps && display_.is_processing(); step++) {
       g_mock_timer_us += 1000000LL;  // +1 s
       display_.loop();
     }
   }
 
   // --- Accessors wrapping private member access (allowed via friend) ---
-  AsyncJobType job_type() const { return display_.async_job_.type; }
-  AsyncStage job_stage() const { return display_.async_job_.stage; }
-  bool job_cancelled() const { return display_.async_job_.state == JobState::CANCELLING; }
-  int job_region_x() const { return display_.async_job_.region_x; }
-  int job_region_y() const { return display_.async_job_.region_y; }
-  int job_region_width() const { return display_.async_job_.region_width; }
-  int job_region_height() const { return display_.async_job_.region_height; }
-  bool pending_has_pending() const { return display_.pending_job_.has_pending; }
-  AsyncJobType pending_type() const { return display_.pending_job_.type; }
+  DisplayOperationType operation_type() const { return display_.active_operation_.type; }
+  DisplayOperationStage operation_stage() const { return display_.active_operation_.stage; }
+  bool operation_cancelled() const { return display_.active_operation_.state == DisplayOperationState::CANCELLING; }
+  int operation_region_x() const { return display_.active_operation_.region_x; }
+  int operation_region_y() const { return display_.active_operation_.region_y; }
+  int operation_region_width() const { return display_.active_operation_.region_width; }
+  int operation_region_height() const { return display_.active_operation_.region_height; }
+  bool pending_has_pending() const { return display_.pending_operation_.has_pending; }
+  DisplayOperationType pending_type() const { return display_.pending_operation_.type; }
   bool is_in_hw_refresh_stage() const { return display_.is_in_hw_refresh_stage_(); }
   bool buffer_is_filled_with(uint8_t color_code) const {
     const uint8_t packed = static_cast<uint8_t>((color_code << 4) | color_code);
@@ -135,103 +135,103 @@ class EpaperSpectra6133ComponentTest : public ::testing::Test {
 };
 
 // ---------------------------------------------------------------------------
-// 1. update() schedules a display job and sets is_busy() to true.
+// 1. update() schedules a display operation and sets is_processing() to true.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, UpdateSchedulesJob) {
-  EXPECT_FALSE(display_.is_busy());
+TEST_F(EpaperSpectra6133ComponentTest, UpdateSchedulesOperation) {
+  EXPECT_FALSE(display_.is_processing());
   display_.update();
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::UPDATE);
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::UPDATE);
 }
 
 // ---------------------------------------------------------------------------
-// 2. Completing the scheduled job resets is_busy() to false.
+// 2. Completing the scheduled operation resets is_processing() to false.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, JobCompletionClearsBusy) {
+TEST_F(EpaperSpectra6133ComponentTest, OperationCompletionClearsProcessing) {
   display_.update();
-  EXPECT_TRUE(display_.is_busy());
+  EXPECT_TRUE(display_.is_processing());
 
   run_loop_until_done();
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
 }
 
 // ---------------------------------------------------------------------------
-// 3. Starting update_region() while update() is active supersedes the first job.
+// 3. Starting update_region() while update() is active supersedes the first operation.
 // ---------------------------------------------------------------------------
 TEST_F(EpaperSpectra6133ComponentTest, UpdateRegionReplacesActiveUpdate) {
   display_.update();
-  EXPECT_TRUE(display_.is_busy());
+  EXPECT_TRUE(display_.is_processing());
 
-  // Start a region job — should cancel the running full update.
+  // Start a region operation — should cancel running full update.
   display_.update_region(0, 0, 100, 100);
 
-  // Still busy (new job is active).
-  EXPECT_TRUE(display_.is_busy());
+  // Still processing (new operation is active).
+  EXPECT_TRUE(display_.is_processing());
 
-  // The new job type is UPDATE_REGION.
-  EXPECT_EQ(job_type(), AsyncJobType::UPDATE_REGION);
-  EXPECT_EQ(job_stage(), AsyncStage::INIT);
+  // The new operation type is UPDATE_REGION.
+  EXPECT_EQ(operation_type(), DisplayOperationType::UPDATE_REGION);
+  EXPECT_EQ(operation_stage(), DisplayOperationStage::INIT);
 }
 
 // ---------------------------------------------------------------------------
-// 4. flush() while any other job is active supersedes it.
+// 4. refresh() while any other operation is active supersedes it.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, FlushReplacesAnyActiveJob) {
+TEST_F(EpaperSpectra6133ComponentTest, RefreshReplacesAnyActiveOperation) {
   display_.update();
-  display_.flush();
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::FLUSH);
+  display_.refresh();
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH);
 }
 
 // ---------------------------------------------------------------------------
-// 5. Calling cancel() marks the job as CANCELLING; loop() then tears it down.
+// 5. Calling cancel() marks the operation as CANCELLING; loop() then tears it down.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, CancelClearsBusy) {
+TEST_F(EpaperSpectra6133ComponentTest, CancelClearsProcessing) {
   display_.update();
-  EXPECT_TRUE(display_.is_busy());
+  EXPECT_TRUE(display_.is_processing());
 
   display_.cancel();
-  // The CANCELLING flag is set; busy is still true until loop() runs.
-  EXPECT_TRUE(job_cancelled());
+  // The CANCELLING flag is set; processing remains true until loop() runs.
+  EXPECT_TRUE(operation_cancelled());
 
-  // One loop() call runs abort and clears the job.
+  // One loop() call runs abort and clears the operation.
   display_.loop();
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
 }
 
 // ---------------------------------------------------------------------------
-// 6. Calling cancel() when no job is active is a safe no-op.
+// 6. Calling cancel() when no operation is active is a safe no-op.
 // ---------------------------------------------------------------------------
 TEST_F(EpaperSpectra6133ComponentTest, CancelWhenIdleIsSafe) {
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
   EXPECT_NO_FATAL_FAILURE(display_.cancel());
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
 }
 
 // ---------------------------------------------------------------------------
 // 7. After cancel(), further loop() calls clean up once and then exit cleanly.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, CancelledJobDoesNotProgressAfterTeardown) {
+TEST_F(EpaperSpectra6133ComponentTest, CancelledOperationDoesNotProgressAfterTeardown) {
   display_.update();
   display_.cancel();
 
   // Let loop() process the cancellation.
   display_.loop();
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
 
   // Additional loop() calls should be no-ops.
   EXPECT_NO_FATAL_FAILURE(display_.loop());
   EXPECT_NO_FATAL_FAILURE(display_.loop());
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
 }
 
 // ---------------------------------------------------------------------------
-// 8. After job completion, further loop() calls return immediately.
+// 8. After operation completion, further loop() calls return immediately.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, LoopIsInertAfterJobCompletion) {
-  display_.flush();
+TEST_F(EpaperSpectra6133ComponentTest, LoopIsInertAfterOperationCompletion) {
+  display_.refresh();
   run_loop_until_done();
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
 
   const size_t ops_at_end = transport_state().operations.size();
 
@@ -243,30 +243,30 @@ TEST_F(EpaperSpectra6133ComponentTest, LoopIsInertAfterJobCompletion) {
 }
 
 // ---------------------------------------------------------------------------
-// Extra: flush_region() schedules a FLUSH_REGION job.
+// Extra: refresh_region() schedules a REFRESH_REGION operation.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, FlushRegionSchedulesCorrectJobType) {
-  display_.flush_region(10, 20, 50, 50);
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::FLUSH_REGION);
-  EXPECT_EQ(job_region_x(), 10);
-  EXPECT_EQ(job_region_y(), 20);
-  EXPECT_EQ(job_region_width(), 50);
-  EXPECT_EQ(job_region_height(), 50);
+TEST_F(EpaperSpectra6133ComponentTest, RefreshRegionSchedulesCorrectOperationType) {
+  display_.refresh_region(10, 20, 50, 50);
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH_REGION);
+  EXPECT_EQ(operation_region_x(), 10);
+  EXPECT_EQ(operation_region_y(), 20);
+  EXPECT_EQ(operation_region_width(), 50);
+  EXPECT_EQ(operation_region_height(), 50);
 }
 
 // ---------------------------------------------------------------------------
-// Extra: update() while another job is active supersedes the previous job.
+// Extra: update() while another operation is active supersedes the previous operation.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, UpdateSupersedessActiveJob) {
-  display_.flush();
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::FLUSH);
+TEST_F(EpaperSpectra6133ComponentTest, UpdateSupersedessActiveOperation) {
+  display_.refresh();
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH);
 
-  // update() should supersede flush(), not skip.
+  // update() should supersede refresh(), not skip.
   EXPECT_NO_FATAL_FAILURE(display_.update());
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::UPDATE);
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::UPDATE);
 }
 
 // ---------------------------------------------------------------------------
@@ -274,12 +274,12 @@ TEST_F(EpaperSpectra6133ComponentTest, UpdateSupersedessActiveJob) {
 //     asserted; once BUSY clears, the next loop() call aborts cleanly.
 // ---------------------------------------------------------------------------
 TEST_F(EpaperSpectra6133ComponentTest, CancelDuringRefreshStageWaitsForBusy) {
-  display_.flush();
+  display_.refresh();
 
-  // Advance the job until it reaches RF_PON (all data already transferred).
-  // With mock_busy_level=1 the stub is "not busy" so RF_WAIT_* stages pass
+  // Advance the operation until it reaches POWER_ON (all data already transferred).
+  // With mock_busy_level=1 the stub is "not busy" so WAIT_* stages pass
   // instantly.  We pump until we enter a refresh stage.
-  // Simulate busy panel from RF_PON onward.
+  // Simulate busy panel from POWER_ON onward.
   set_display_busy(true);
   // Run one loop step at a time until we are in a refresh stage.
   for (int i = 0; i < 2000 && !is_in_hw_refresh_stage(); i++) {
@@ -290,24 +290,24 @@ TEST_F(EpaperSpectra6133ComponentTest, CancelDuringRefreshStageWaitsForBusy) {
   EXPECT_TRUE(is_in_hw_refresh_stage());
 
   display_.cancel();
-  EXPECT_TRUE(job_cancelled());
+  EXPECT_TRUE(operation_cancelled());
 
   // loop() must not abort while BUSY is asserted.
   display_.loop();
-  EXPECT_TRUE(display_.is_busy());  // still busy — waiting for BUSY pin
+  EXPECT_TRUE(display_.is_processing());  // still busy — waiting for BUSY pin
 
-  // Once the panel releases BUSY, the next loop() aborts the job.
+  // Once the panel releases BUSY, the next loop() aborts the operation.
   set_display_busy(false);
   display_.loop();
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
 }
 
 // ---------------------------------------------------------------------------
-// 12. Scheduling a new job while an existing job is in a refresh stage
-//     queues it as pending and keeps is_busy() true.
+// 12. Scheduling a new operation while an existing operation is in a refresh stage
+//     queues it as pending and keeps is_processing() true.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, ScheduleDuringRefreshStageQueuesPendingJob) {
-  display_.flush();
+TEST_F(EpaperSpectra6133ComponentTest, ScheduleDuringRefreshStageQueuesPendingOperation) {
+  display_.refresh();
 
   // Advance until in a refresh stage with BUSY asserted.
   set_display_busy(true);
@@ -317,24 +317,24 @@ TEST_F(EpaperSpectra6133ComponentTest, ScheduleDuringRefreshStageQueuesPendingJo
   }
   EXPECT_TRUE(is_in_hw_refresh_stage());
 
-  // Schedule a replacement job.
-  display_.flush_region(0, 0, 100, 200);
+  // Schedule a replacement operation.
+  display_.refresh_region(0, 0, 100, 200);
 
-  // The old job must be marked CANCELLING (not immediately aborted).
-  EXPECT_TRUE(job_cancelled());
-  // A pending job must have been stored.
+  // The old operation must be marked CANCELLING (not immediately aborted).
+  EXPECT_TRUE(operation_cancelled());
+  // A pending operation must have been stored.
   EXPECT_TRUE(pending_has_pending());
-  EXPECT_EQ(pending_type(), AsyncJobType::FLUSH_REGION);
-  // is_busy() must still be true (pending job counts as busy).
-  EXPECT_TRUE(display_.is_busy());
+  EXPECT_EQ(pending_type(), DisplayOperationType::REFRESH_REGION);
+  // is_processing() must still be true (pending operation counts as processing).
+  EXPECT_TRUE(display_.is_processing());
 }
 
 // ---------------------------------------------------------------------------
-// 13. After a pending job is queued, it auto-starts once BUSY clears and
-//     the draining job is torn down.
+// 13. After a pending operation is queued, it auto-starts once BUSY clears and
+//     the draining operation is torn down.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, PendingJobStartsAfterRefreshDrains) {
-  display_.flush();
+TEST_F(EpaperSpectra6133ComponentTest, PendingOperationStartsAfterRefreshDrains) {
+  display_.refresh();
 
   // Advance until in a refresh stage with BUSY asserted.
   set_display_busy(true);
@@ -344,71 +344,71 @@ TEST_F(EpaperSpectra6133ComponentTest, PendingJobStartsAfterRefreshDrains) {
   }
   EXPECT_TRUE(is_in_hw_refresh_stage());
 
-  // Queue the replacement job.
-  display_.flush_region(10, 20, 300, 400);
+  // Queue the replacement operation.
+  display_.refresh_region(10, 20, 300, 400);
   EXPECT_TRUE(pending_has_pending());
 
-  // Release BUSY; the next loop() should drain the old job AND start pending.
+  // Release BUSY; the next loop() should drain the old operation AND start pending.
   set_display_busy(false);
   display_.loop();
 
-  // The pending job should now be the active job.
+  // The pending operation should now be the active operation.
   EXPECT_FALSE(pending_has_pending());
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::FLUSH_REGION);
-  EXPECT_EQ(job_stage(), AsyncStage::INIT);
-  EXPECT_EQ(job_region_x(), 10);
-  EXPECT_EQ(job_region_y(), 20);
-  EXPECT_EQ(job_region_width(), 300);
-  EXPECT_EQ(job_region_height(), 400);
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH_REGION);
+  EXPECT_EQ(operation_stage(), DisplayOperationStage::INIT);
+  EXPECT_EQ(operation_region_x(), 10);
+  EXPECT_EQ(operation_region_y(), 20);
+  EXPECT_EQ(operation_region_width(), 300);
+  EXPECT_EQ(operation_region_height(), 400);
 }
 
 // ---------------------------------------------------------------------------
-// 14. cancel() while a pending job exists discards the pending job.
+// 14. cancel() while a pending operation exists discards the pending operation.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, CancelDiscardsPendingJob) {
-  display_.flush();
+TEST_F(EpaperSpectra6133ComponentTest, CancelDiscardsPendingOperation) {
+  display_.refresh();
 
   set_display_busy(true);
   for (int i = 0; i < 2000 && !is_in_hw_refresh_stage(); i++) {
     g_mock_timer_us += 1000000LL;
     display_.loop();
   }
-  display_.flush_region(0, 0, 100, 100);  // queues as pending
+  display_.refresh_region(0, 0, 100, 100);  // queues as pending
   EXPECT_TRUE(pending_has_pending());
 
-  // Explicit cancel clears both the active job AND the pending job.
+  // Explicit cancel clears both the active operation AND the pending operation.
   display_.cancel();
   EXPECT_FALSE(pending_has_pending());
 
   // After BUSY clears, the abort runs and nothing new starts.
   set_display_busy(false);
   display_.loop();
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
 }
 
 // ---------------------------------------------------------------------------
-// 15. update_region() schedules an UPDATE_REGION job with correct coordinates.
+// 15. update_region() schedules an UPDATE_REGION operation with correct coordinates.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, UpdateRegionSchedulesJobWithCoordinates) {
+TEST_F(EpaperSpectra6133ComponentTest, UpdateRegionSchedulesOperationWithCoordinates) {
   display_.update_region(50, 100, 200, 300);
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::UPDATE_REGION);
-  EXPECT_EQ(job_region_x(), 50);
-  EXPECT_EQ(job_region_y(), 100);
-  EXPECT_EQ(job_region_width(), 200);
-  EXPECT_EQ(job_region_height(), 300);
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::UPDATE_REGION);
+  EXPECT_EQ(operation_region_x(), 50);
+  EXPECT_EQ(operation_region_y(), 100);
+  EXPECT_EQ(operation_region_width(), 200);
+  EXPECT_EQ(operation_region_height(), 300);
 }
 
 // ---------------------------------------------------------------------------
-// 16. is_busy() returns false only when fully idle (no active, no pending).
+// 16. is_processing() returns false only when fully idle (no active, no pending).
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, IsBusyReturnsFalseWhenIdle) {
-  EXPECT_FALSE(display_.is_busy());
-  display_.flush();
-  EXPECT_TRUE(display_.is_busy());
+TEST_F(EpaperSpectra6133ComponentTest, IsProcessingReturnsFalseWhenIdle) {
+  EXPECT_FALSE(display_.is_processing());
+  display_.refresh();
+  EXPECT_TRUE(display_.is_processing());
   run_loop_until_done();
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
 }
 
 // ---------------------------------------------------------------------------
@@ -422,8 +422,8 @@ TEST_F(EpaperSpectra6133ComponentTest, ClearFillsBufferWithoutRefresh) {
 
   display_.clear();
 
-  EXPECT_FALSE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::NONE);
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::NONE);
   EXPECT_TRUE(buffer_is_filled_with(COLOR_WHITE));
 }
 
@@ -438,8 +438,8 @@ TEST_F(EpaperSpectra6133ComponentTest, BaseClassClearDispatchUsesWhiteWithoutRef
   esphome::display::DisplayBuffer *base_display = &display_;
   base_display->clear();
 
-  EXPECT_FALSE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::NONE);
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::NONE);
   EXPECT_TRUE(buffer_is_filled_with(COLOR_WHITE));
 }
 
@@ -451,21 +451,21 @@ TEST_F(EpaperSpectra6133ComponentTest, ClearUsesConfiguredClearColor) {
   display_.set_clear_color(EpaperSpectra6133::BLUE);
   display_.clear();
 
-  EXPECT_FALSE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::NONE);
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::NONE);
   EXPECT_TRUE(buffer_is_filled_with(COLOR_BLUE));
 }
 
-TEST_F(EpaperSpectra6133ComponentTest, SleepSchedulesJobAndMarksDisplaySleeping) {
+TEST_F(EpaperSpectra6133ComponentTest, SleepSchedulesOperationAndMarksDisplaySleeping) {
   reset_transport_state();
 
   display_.sleep();
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::SLEEP);
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::SLEEP);
 
   run_loop_until_done();
 
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
   EXPECT_TRUE(display_.is_sleeping());
   EXPECT_FALSE(display_.is_ready());
   EXPECT_EQ(count_register_writes(transport_state().operations, DSLP), 1U);
@@ -475,17 +475,17 @@ TEST_F(EpaperSpectra6133ComponentTest, SleepIsIdempotentWhenAlreadySleeping) {
   display_.sleep();
   run_loop_until_done();
   ASSERT_TRUE(display_.is_sleeping());
-  ASSERT_FALSE(display_.is_busy());
+  ASSERT_FALSE(display_.is_processing());
 
   reset_transport_state();
 
   display_.sleep();
 
-  EXPECT_FALSE(display_.is_busy());
+  EXPECT_FALSE(display_.is_processing());
   EXPECT_EQ(count_register_writes(transport_state().operations, DSLP), 0U);
 }
 
-TEST_F(EpaperSpectra6133ComponentTest, UpdateAutoWakesSleepingDisplayBeforeSchedulingJob) {
+TEST_F(EpaperSpectra6133ComponentTest, UpdateAutoWakesSleepingDisplayBeforeSchedulingOperation) {
   display_.sleep();
   run_loop_until_done();
   ASSERT_TRUE(display_.is_sleeping());
@@ -496,13 +496,13 @@ TEST_F(EpaperSpectra6133ComponentTest, UpdateAutoWakesSleepingDisplayBeforeSched
 
   EXPECT_FALSE(display_.is_sleeping());
   EXPECT_TRUE(display_.is_ready());
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::UPDATE);
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::UPDATE);
   EXPECT_GT(count_register_writes(transport_state().operations, TRES), 0U);
 }
 
 TEST_F(EpaperSpectra6133ComponentTest, SleepDuringRefreshStageWaitsForBusyBeforeStarting) {
-  display_.flush();
+  display_.refresh();
 
   set_display_busy(true);
   for (int i = 0; i < 2000 && !is_in_hw_refresh_stage(); i++) {
@@ -513,17 +513,17 @@ TEST_F(EpaperSpectra6133ComponentTest, SleepDuringRefreshStageWaitsForBusyBefore
 
   display_.sleep();
 
-  EXPECT_TRUE(job_cancelled());
+  EXPECT_TRUE(operation_cancelled());
   EXPECT_TRUE(pending_has_pending());
-  EXPECT_EQ(pending_type(), AsyncJobType::SLEEP);
+  EXPECT_EQ(pending_type(), DisplayOperationType::SLEEP);
 
   display_.loop();
-  EXPECT_TRUE(display_.is_busy());
+  EXPECT_TRUE(display_.is_processing());
 
   set_display_busy(false);
   display_.loop();
-  EXPECT_TRUE(display_.is_busy());
-  EXPECT_EQ(job_type(), AsyncJobType::SLEEP);
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::SLEEP);
 
   run_loop_until_done();
   EXPECT_TRUE(display_.is_sleeping());
@@ -533,7 +533,7 @@ TEST_F(EpaperSpectra6133ComponentTest, AutoSleepSleepsAfterFullRefresh) {
   display_.set_auto_sleep(true);
   reset_transport_state();
 
-  display_.flush();
+  display_.refresh();
   run_loop_until_done();
 
   EXPECT_TRUE(display_.is_sleeping());
@@ -544,7 +544,7 @@ TEST_F(EpaperSpectra6133ComponentTest, AutoSleepSleepsAfterPartialRefresh) {
   display_.set_auto_sleep(true);
   reset_transport_state();
 
-  display_.flush_region(10, 20, 80, 60);
+  display_.refresh_region(10, 20, 80, 60);
   run_loop_until_done();
 
   EXPECT_TRUE(display_.is_sleeping());
