@@ -23,12 +23,12 @@
 
 ## ✨ What this component does
 
-A ESPHome display component for large-format 13.3″ Spectra 6 e-paper panels. It keeps the familiar ESPHome drawing model, adds an asynchronous refresh pipeline, and gives you precise control over full-screen and partial updates.
+An ESPHome display component for large-format 13.3″ Spectra 6 e-paper panels. It keeps the familiar ESPHome drawing model, adds a cooperative refresh pipeline, and gives you precise control over full-screen and partial updates.
 
 | Capability | What it means |
 | --- | --- |
 | **Draw like any ESPHome display** | Use the standard `DisplayBuffer` API for text, shapes, images, pages, and custom layouts. |
-| **Refresh without blocking ESPHome** | Long-running panel updates are handled as cooperative jobs across `loop()` iterations, so WiFi, sensors, API traffic, and automations keep running. |
+| **Refresh without blocking ESPHome** | Long-running panel updates are handled as cooperative display operations across `loop()` iterations, so WiFi, sensors, API traffic, and automations keep running. |
 | **Update only what changed** | Choose full refreshes for complete frames or partial refreshes for the detected changed region. |
 
 ---
@@ -315,13 +315,13 @@ Use this local form only when the package file is present next to your ESPHome Y
 | `busy_pin` | pin | *required* | Panel BUSY signal (active low) |
 | `reset_pin` | pin | *required* | Hardware reset |
 | `power_pin` | pin | *required* | Controls the power supply to the panel |
-| `update_mode` | string | `full` | Whether `update()` transfers the full frame (`full`) or only the detected changed region (`partial`) |
+| `refresh_mode` | string | `full` | Whether `update()` transfers the full frame (`full`) or only the detected changed region (`partial`) |
 | `change_detection_mode` | string | `track` | How to detect changed pixels: `track` (pixel-write accumulator) or `compare` (frame comparison, requires an additional 960 KB of PSRAM) |
 | `auto_sleep` | bool | `true` | Send the panel deep-sleep command after each successful refresh |
 | `power_off_after_sleep` | bool | `false` | Also switch `power_pin` low after the panel has entered deep sleep |
 | `update_interval` | time | `never` | How often to re-render the display. Use `never` to update only on demand. Accepts values like `30s`, `5min`, `1h`. |
 | `clear_color` | string | `white` | Colour used by `clear()` and by `auto_clear_enabled`. Valid values: `black`, `white`, `yellow`, `red`, `blue`, `green`. |
-| `auto_clear_enabled` | bool | `true` | Fill the canvas with `clear_color` before the lambda runs on each `update()` call. Has no effect on `flush()` or `flush_region()`. |
+| `auto_clear_enabled` | bool | `true` | Fill the canvas with `clear_color` before the lambda runs on each `update()` call. Has no effect on `refresh()` or `refresh_region()`. |
 | `lambda` | lambda | — | Drawing code that runs on every `update()` call. Receives the display as `it`. Use `it.print()`, `it.filled_rectangle()`, `it.image()`, etc. to compose the screen. |
 | `pages` | list | — | Standard ESPHome [display pages](https://esphome.io/components/display/#pages) |
 
@@ -329,21 +329,21 @@ Use this local form only when the package file is present next to your ESPHome Y
 
 | Method | Description |
 |--------|-------------|
-| `update()` | Runs the lambda, updates the framebuffer, then refreshes the display according to `update_mode` |
+| `update()` | Runs the lambda, updates the framebuffer, then refreshes the display according to `refresh_mode` |
 | `update_region(x, y, w, h)` | Runs the lambda, then refreshes only the specified rectangle |
 | `update_region(region)` | Same as `update_region(x, y, w, h)`, but uses an `UpdateRegion` object |
-| `flush()` | Refreshes the display from the current framebuffer without running the lambda |
-| `flush_region(x, y, w, h)` | Refreshes the specified rectangle from the current framebuffer without running the lambda |
+| `refresh()` | Refreshes the display from the current framebuffer without running the lambda |
+| `refresh_region(x, y, w, h)` | Refreshes the specified rectangle from the current framebuffer without running the lambda |
 | `fill(color)` | Fills the framebuffer with a colour; does not refresh the display |
 | `clear()` | Fills the framebuffer with `clear_color`; does not refresh the display |
 | `detect_changed_region()` | Returns the currently detected changed rectangle |
 | `reset_change_tracking()` | Clears the accumulated changed rectangle |
-| `is_busy()` | Returns `true` while a display job is active or waiting to run |
+| `is_processing()` | Returns `true` while a display operation is active or waiting to run |
 | `is_ready()` | Returns `true` after the display has been initialised |
 | `is_sleeping()` | Returns `true` after the panel has successfully entered deep sleep |
 | `sleep()` | Schedules the panel to enter deep sleep |
 | `wake()` | Reinitialises a sleeping panel immediately |
-| `cancel()` | Cancels the current or pending display job where it is safe to do so |
+| `cancel()` | Cancels the current or pending display operation where it is safe to do so |
 | `get_version()` | Returns the component version string (static) |
 
 ---
@@ -436,13 +436,13 @@ The conversion step is especially useful for photos, gradients, screenshots, and
 
 ### 4. Enable partial updates for `update()`
 
-By default, `update()` refreshes the complete 1200×1600 framebuffer. For screens where only a small area changes, such as clocks or dashboards, `update_mode: partial` lets the driver transfer only the detected changed rectangle:
+By default, `update()` refreshes the complete 1200×1600 framebuffer. For screens where only a small area changes, such as clocks or dashboards, `refresh_mode: partial` lets the driver transfer only the detected changed rectangle:
 
 ```yaml
 display:
   - platform: epaper_spectra6_133
     id: epd
-    update_mode: partial
+    refresh_mode: partial
 ```
 
 Partial updates control how much framebuffer data is transferred to the panel. They do not make a Spectra 6 panel behave like a fast monochrome e-paper display.
@@ -453,7 +453,7 @@ Partial updates control how much framebuffer data is transferred to the panel. T
 | `partial` | Transfers only the detected changed rectangle | Clocks, dashboards, mostly-static screens |
 
 > [!NOTE]
-> `update_mode` only governs what `update()` does. When you call `flush_region()` directly, you specify the region yourself — `update_mode` has no effect.
+> `refresh_mode` only governs what `update()` does. When you call `refresh_region()` directly, you specify the region yourself — `refresh_mode` has no effect.
 
 > [!IMPORTANT]
 > Partial updates can produce temporary artefacts such as colour drift inside the refreshed region or boundary artefacts around the refreshed rectangle. For clocks, dashboards, and status screens this is usually acceptable. For colour-critical images, use a full refresh.
@@ -475,7 +475,7 @@ When partial mode is enabled, the driver needs to know which pixels changed. Thi
 display:
   - platform: epaper_spectra6_133
     id: epd
-    update_mode: partial
+    refresh_mode: partial
     change_detection_mode: track
 ```
 
@@ -490,7 +490,7 @@ For real partial updates in `track` mode, disable automatic clearing and redraw 
 display:
   - platform: epaper_spectra6_133
     id: epd
-    update_mode: partial
+    refresh_mode: partial
     change_detection_mode: track
     auto_clear_enabled: false
     lambda: |-
@@ -507,7 +507,7 @@ display:
 display:
   - platform: epaper_spectra6_133
     id: epd
-    update_mode: partial
+    refresh_mode: partial
     change_detection_mode: compare
 ```
 
@@ -516,25 +516,25 @@ display:
 
 ### 6. Work with the display outside the lambda
 
-Automations, button handlers, and Home Assistant triggers sometimes need to change the screen without re-running the display lambda. In that case, draw directly on the component, then push the framebuffer with `flush()` or `flush_region()`.
+Automations, button handlers, and Home Assistant triggers sometimes need to change the screen without re-running the display lambda. In that case, draw directly on the component, then push the framebuffer with `refresh()` or `refresh_region()`.
 
 > [!WARNING]
 > Don't use `update()` for this workflow — it re-runs the lambda first and overwrites everything you just drew.
 
-Display calls such as `update()`, `update_region()`, `flush()`, and `flush_region()` schedule cooperative jobs and return immediately. The hardware work is progressed from ESPHome's `loop()` in small steps: rows are streamed to the panel, the BUSY pin is polled, and command delays are handled without blocking the main loop for the full refresh duration.
+Display calls such as `update()`, `update_region()`, `refresh()`, and `refresh_region()` schedule cooperative display operations and return immediately. The hardware work is progressed from ESPHome's `loop()` in small steps: rows are streamed to the panel, the BUSY pin is polled, and command delays are handled without blocking the main loop for the full refresh duration.
 
 This matters because a Spectra 6 refresh can take several seconds. During that time ESPHome continues to handle WiFi, API traffic, sensors, and automations.
 
-Only one display job can be active at a time. Starting a new job supersedes the previous request. `is_busy()` remains `true` while a job is active or pending.
+Only one display operation can be active at a time. Starting a new operation supersedes the previous request. `is_processing()` remains `true` while an operation is active or pending.
 
 > [!TIP]
-> Treat display calls as asynchronous jobs. Use `is_busy()` when you need to know whether the display is still processing a previous request.
+> Treat display calls as cooperative display operations. Use `is_processing()` when you need to know whether the display is still processing a previous request.
 
 ### 7. Draw directly, then push the framebuffer
 
-`clear()`, `fill()`, `print()`, `image()`, and the other drawing functions modify the framebuffer in memory. They do not refresh the physical panel by themselves. After drawing directly on the component, use `flush()` or `flush_region()` to send the current framebuffer to the display.
+`clear()`, `fill()`, `print()`, `image()`, and the other drawing functions modify the framebuffer in memory. They do not refresh the physical panel by themselves. After drawing directly on the component, use `refresh()` or `refresh_region()` to send the current framebuffer to the display.
 
-Use `flush()` when the complete framebuffer should be transferred:
+Use `refresh()` when the complete framebuffer should be transferred:
 
 ```yaml
 button:
@@ -545,10 +545,10 @@ button:
           id(epd).fill(Color(255, 255, 255));
           id(epd).print(600, 800, id(font_alert), Color(255, 0, 0),
                         TextAlign::CENTER, "ALERT");
-          id(epd).flush();
+          id(epd).refresh();
 ```
 
-Use `flush_region()` when you know exactly which area changed:
+Use `refresh_region()` when you know exactly which area changed:
 
 ```yaml
 button:
@@ -559,12 +559,12 @@ button:
           id(epd).filled_rectangle(100, 700, 500, 200, Color(255, 255, 255));
           id(epd).print(350, 800, id(font_status), Color(0, 0, 0),
                         TextAlign::CENTER, "Updated");
-          id(epd).flush_region(100, 700, 500, 200);
+          id(epd).refresh_region(100, 700, 500, 200);
 ```
 
-### 8. Detect a changed region and flush it manually
+### 8. Detect a changed region and refresh it manually
 
-When you draw outside the lambda but do not want to calculate the bounds yourself, reset the change tracker, draw the new content, ask the driver for the detected region, and pass that region to `flush_region()`:
+When you draw outside the lambda but do not want to calculate the bounds yourself, reset the change tracker, draw the new content, ask the driver for the detected region, and pass that region to `refresh_region()`:
 
 ```yaml
 button:
@@ -579,7 +579,7 @@ button:
 
           auto region = id(epd).detect_changed_region();
           if (!region.empty()) {
-            id(epd).flush_region(region.x, region.y, region.width, region.height);
+            id(epd).refresh_region(region.x, region.y, region.width, region.height);
           }
 ```
 
@@ -598,10 +598,10 @@ button:
 
 | Current stage | What `cancel()` does |
 |---|---|
-| Data transfer | Aborts the job on the next `loop()` call |
+| Data transfer | Aborts the operation on the next `loop()` call |
 | Hardware refresh (BUSY pin LOW) | Waits until the panel finishes its physical refresh before tearing down |
 
-SPI commands are never sent to a busy panel. In both cases, `is_busy()` stays `true` until teardown is complete. It is safe to call `cancel()` when no job is active.
+SPI commands are never sent to a busy panel. In both cases, `is_processing()` stays `true` until teardown is complete. It is safe to call `cancel()` when no operation is active.
 
 ```yaml
 button:
@@ -611,20 +611,20 @@ button:
       - lambda: id(epd).cancel();
 ```
 
-When you want to start a new refresh only after the previous one has completed, poll `is_busy()` from an automation instead of blocking inside a lambda:
+When you want to start a new refresh only after the previous one has completed, poll `is_processing()` from an automation instead of blocking inside a lambda:
 
 ```yaml
 interval:
   - interval: 60s
     then:
       - lambda: |-
-          if (!id(epd).is_busy()) {
+          if (!id(epd).is_processing()) {
             id(epd).update();
           }
 ```
 
 > [!WARNING]
-> Avoid blocking on `is_busy()` in a tight loop — this starves the ESPHome main loop. The cooperative pipeline is designed to be polled, not awaited.
+> Avoid blocking on `is_processing()` in a tight loop — this starves the ESPHome main loop. The cooperative pipeline is designed to be polled, not awaited.
 
 ---
 
@@ -632,7 +632,7 @@ interval:
 
 This component can automatically send the panel to deep sleep after every successful refresh. Deep sleep is the normal idle state: it reduces panel-side power consumption while preserving the visible e-paper image.
 
-When you call `update()`, `update_region()`, `flush()`, or `flush_region()` while the panel is sleeping, the component powers the display path, performs a hardware reset, reruns the full initialization sequence, and then transfers the next frame.
+When you call `update()`, `update_region()`, `refresh()`, or `refresh_region()` while the panel is sleeping, the component powers the display path, performs a hardware reset, reruns the full initialization sequence, and then transfers the next frame.
 
 Most dashboards, clocks, photo frames, and low-frequency status displays should keep the default:
 
@@ -662,7 +662,7 @@ button:
       - lambda: id(epd).sleep();
 ```
 
-When `auto_sleep` is enabled, `update()`, `update_region()`, `flush()`, and `flush_region()` automatically wake a sleeping panel before the operation and return it to deep sleep afterwards. `sleep()` schedules a cooperative deep-sleep job that waits for any in-progress BUSY signal to clear before sending the deep-sleep command. See the [Methods](#methods) table for the full signatures of `sleep()`, `wake()`, and `is_sleeping()`.
+When `auto_sleep` is enabled, `update()`, `update_region()`, `refresh()`, and `refresh_region()` automatically wake a sleeping panel before the operation and return it to deep sleep afterwards. `sleep()` schedules a cooperative deep-sleep operation that waits for any in-progress BUSY signal to clear before sending the deep-sleep command. See the [Methods](#methods) table for the full signatures of `sleep()`, `wake()`, and `is_sleeping()`.
 
 `power_off_after_sleep` is a stronger board-level option. It sends the panel deep-sleep command first, then drives `power_pin` low. The next display operation turns power back on and performs a cold wake. Keep this disabled unless your hardware has been verified with the external load switch off.
 

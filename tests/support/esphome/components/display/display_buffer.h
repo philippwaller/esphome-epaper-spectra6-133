@@ -35,6 +35,8 @@ class DisplayBuffer {
   virtual float get_setup_priority() const { return 0.0f; }
   virtual void loop() {}
   virtual void update() {}
+  void enable_loop() {}
+  void disable_loop() {}
 
   // ---- ESPHome DisplayBuffer interface (stubbed) ----
   virtual DisplayType get_display_type() { return DISPLAY_TYPE_COLOR; }
