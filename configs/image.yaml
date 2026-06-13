@@ -55,7 +55,7 @@ external_components:
       # In your own ESPHome config, use the released GitHub version instead:
       # type: git
       # url: https://github.com/philippwaller/esphome-epaper-spectra6-133
-      # ref: v0.3.0  # x-release-please-version
+      # ref: v0.3.1  # x-release-please-version
 
 image:
   - file: images/molly-porter-K7oqWgDJQ6E-unsplash-default-atkinson.png
