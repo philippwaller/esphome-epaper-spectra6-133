@@ -186,7 +186,7 @@ display:
     # This example refreshes explicitly from automations instead of on a timer.
     update_interval: never
     auto_clear_enabled: false
-    update_mode: partial
+    refresh_mode: partial
     cs0_pin: ${epd_cs0_pin}
     cs1_pin: ${epd_cs1_pin}
     clk_pin: ${epd_clk_pin}

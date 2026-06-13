@@ -79,7 +79,7 @@ class Controller {
   /** @brief Clears the initialised flag so a later caller can re-run panel setup. */
   void reset() { this->initialized_ = false; }
 
-  // Step-based primitives for async (cooperative) display execution.
+  // Step-based primitives for cooperative display operation execution.
   // begin_half_transfer() and begin_region_transfer() leave one CS line LOW
   // until the matching end_* call. All other methods cycle CS internally.
 
@@ -146,7 +146,7 @@ class Controller {
   bool is_display_busy() const;
 
   /** @brief Clears partial-region state so later transfers start from full-screen defaults.
-   *  Made public so the async FINISHING stage can call it after region jobs. */
+   *  Made public so the FINISHING stage can call it after region operations. */
   void disable_partial_regions();
 
  private:

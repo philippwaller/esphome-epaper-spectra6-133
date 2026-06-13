@@ -20,7 +20,7 @@ from . import (
     CONF_POWER_OFF_AFTER_SLEEP,
     CONF_RESET_PIN,
     CONF_SPI_HOST,
-    CONF_UPDATE_MODE,
+    CONF_REFRESH_MODE,
     EpaperSpectra6133,
     _validate_spi_host,
 )
@@ -37,9 +37,9 @@ _CHANGE_DETECTION_MODES = {
     ),
 }
 
-_UPDATE_MODES = {
-    "full": cg.RawExpression("esphome::epaper_spectra6_133::UpdateMode::FULL"),
-    "partial": cg.RawExpression("esphome::epaper_spectra6_133::UpdateMode::PARTIAL"),
+_REFRESH_MODES = {
+    "full": cg.RawExpression("esphome::epaper_spectra6_133::RefreshMode::FULL"),
+    "partial": cg.RawExpression("esphome::epaper_spectra6_133::RefreshMode::PARTIAL"),
 }
 
 _CLEAR_COLORS = {
@@ -86,15 +86,15 @@ CONFIG_SCHEMA = display_core.FULL_DISPLAY_SCHEMA.extend(
         ),
         # Refresh mode used by update(). Valid values are full (default, full frame)
         # and partial (refresh only the detected changed region).
-        cv.Optional(CONF_UPDATE_MODE, default="full"): cv.one_of(
-            *_UPDATE_MODES, lower=True
+        cv.Optional(CONF_REFRESH_MODE, default="full"): cv.one_of(
+            *_REFRESH_MODES, lower=True
         ),
         # Colour used by clear() and ESPHome's auto_clear_enabled pre-render
         # clear. Limited to the panel palette; defaults to white for e-paper.
         cv.Optional(CONF_CLEAR_COLOR, default="white"): cv.one_of(
             *_CLEAR_COLORS, lower=True
         ),
-        # Boolean. When true (default), successful refresh jobs automatically send
+        # Boolean. When true (default), successful refresh operations automatically send
         # the panel deep-sleep command; the next display operation wakes it first.
         cv.Optional(CONF_AUTO_SLEEP, default=True): cv.boolean,
         # Boolean. When true, deep sleep also switches power_pin low after the panel
@@ -124,7 +124,7 @@ async def to_code(config):
             _CHANGE_DETECTION_MODES[config[CONF_CHANGE_DETECTION_MODE]]
         )
     )
-    cg.add(var.set_update_mode(_UPDATE_MODES[config[CONF_UPDATE_MODE]]))
+    cg.add(var.set_refresh_mode(_REFRESH_MODES[config[CONF_REFRESH_MODE]]))
     cg.add(var.set_clear_color(_CLEAR_COLORS[config[CONF_CLEAR_COLOR]]))
     cg.add(var.set_auto_sleep(config[CONF_AUTO_SLEEP]))
     cg.add(var.set_power_off_after_sleep(config[CONF_POWER_OFF_AFTER_SLEEP]))
