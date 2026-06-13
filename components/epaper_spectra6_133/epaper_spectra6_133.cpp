@@ -330,12 +330,13 @@ void HOT EpaperSpectra6133::draw_absolute_pixel_internal(int x, int y, Color col
  * @brief Ensures the display is initialized before any operation that requires it.
  *
  * Returns false immediately if the component is in a failed state (no retry).
- * Returns false during is_in_hw_refresh_stage_() — this includes POST_REFRESH_DELAY,
- * which is an uninterruptible hardware settle window; callers must not issue
- * wake() or initialize() (and therefore no SPI commands) until the stage has
- * elapsed and loop() has advanced past it.
- * Returns true if already initialized. Otherwise it runs the panel init
- * sequence on demand so later updates can recover from a cold start.
+ * Returns true if already initialized — this is safe to call even during an
+ * active hardware stage, because no SPI commands are issued.
+ * Returns false (deferring wake/initialize) when a hardware stage or the
+ * POST_REFRESH_DELAY settle window is in progress; wake() and initialize()
+ * must not send SPI commands until the panel is ready.  POST_REFRESH_DELAY is
+ * checked separately because it is a timer-based delay not covered by
+ * is_in_hw_refresh_stage_(), which is coupled to BUSY-pin polling.
  */
 bool EpaperSpectra6133::ensure_initialized_() {
   // Guard against infinite re-initialization: once mark_failed() has been called,
@@ -343,14 +344,14 @@ bool EpaperSpectra6133::ensure_initialized_() {
   if (this->is_failed()) {
     return false;
   }
-  // Do not call wake() or initialize() while a hardware stage (including
-  // POST_REFRESH_DELAY) is in progress; the panel cannot accept SPI commands
-  // until the stage has elapsed.
-  if (this->is_in_hw_refresh_stage_()) {
-    return false;
-  }
   if (this->controller_.is_initialized()) {
     return true;
+  }
+  // Do not call wake() or initialize() while a hardware stage or the
+  // POST_REFRESH_DELAY settle window is in progress; the panel cannot accept
+  // SPI commands until the stage has elapsed.
+  if (this->is_in_hw_refresh_stage_() || this->active_operation_.stage == DisplayOperationStage::POST_REFRESH_DELAY) {
+    return false;
   }
   if (this->sleeping_) {
     return this->wake();
@@ -358,7 +359,14 @@ bool EpaperSpectra6133::ensure_initialized_() {
   return this->initialize();
 }
 
-/** @brief Copies the current framebuffer to the previous-frame buffer (compare mode). */
+/**
+ * @brief Copies sent pixels from the framebuffer into the previous-frame buffer (compare mode).
+ *
+ * For full-frame operations the entire buffer is copied.  For region operations
+ * only the rows that were actually sent to the panel ([region_y, region_y+region_height))
+ * are updated; rows outside the refreshed rectangle are left as-is so that
+ * find_changed_region() still sees them as pending on the next cycle.
+ */
 void EpaperSpectra6133::update_previous_frame_() {
   if (this->buffer_ == nullptr) {
     return;
@@ -376,7 +384,16 @@ void EpaperSpectra6133::update_previous_frame_() {
     }
     ESP_LOGI(TAG, "Previous-frame buffer allocated (%u bytes, PSRAM)", static_cast<unsigned>(FULL_FRAME_SIZE));
   }
-  std::memcpy(this->previous_frame_buffer_, this->buffer_, FULL_FRAME_SIZE);
+  if (this->active_operation_.use_full_frame) {
+    std::memcpy(this->previous_frame_buffer_, this->buffer_, FULL_FRAME_SIZE);
+  } else {
+    // Only sync the rows covered by the region that was sent to the panel.
+    const int y0 = this->active_operation_.region_y;
+    const int y1 = y0 + this->active_operation_.region_height;
+    const size_t offset = static_cast<size_t>(y0) * ROW_BYTES;
+    const size_t len = static_cast<size_t>(y1 - y0) * ROW_BYTES;
+    std::memcpy(this->previous_frame_buffer_ + offset, this->buffer_ + offset, len);
+  }
 }
 // =============================================================================
 // Cooperative display pipeline
@@ -521,13 +538,32 @@ void EpaperSpectra6133::abort_display_operation_() {
 
 /**
  * @brief Finalises a completed display operation: cleanup, update previous frame, reset tracking, and clear.
+ *
+ * For region operations, only the refreshed rectangle is synced into the previous-frame buffer
+ * (compare mode) and dirty tracking is cleared only when the refreshed rect fully contains the
+ * current tracked region (track mode).  This preserves pending changes outside the refreshed
+ * area so the next partial update does not skip pixels the panel never received.
  */
 void EpaperSpectra6133::finish_display_operation_() {
   if (!this->active_operation_.use_full_frame && !this->sleeping_) {
     this->controller_.disable_partial_regions();
   }
   this->update_previous_frame_();
-  this->reset_change_tracking();
+  if (this->active_operation_.use_full_frame) {
+    this->reset_change_tracking();
+  } else {
+    // Only discard the tracked dirty region if it falls entirely within the
+    // rectangle that was just sent to the panel; otherwise pending pixels
+    // outside the refreshed area must be preserved for the next cycle.
+    const UpdateRegion &tr = this->tracked_region_;
+    const int rx = this->active_operation_.region_x;
+    const int ry = this->active_operation_.region_y;
+    const int rx2 = rx + this->active_operation_.region_width;
+    const int ry2 = ry + this->active_operation_.region_height;
+    if (tr.empty() || (tr.x >= rx && tr.y >= ry && tr.x + tr.width <= rx2 && tr.y + tr.height <= ry2)) {
+      this->reset_change_tracking();
+    }
+  }
   this->active_operation_ = {};
   this->disable_loop();
   ESP_LOGD(TAG, "Display operation completed");
@@ -556,10 +592,6 @@ bool EpaperSpectra6133::is_in_hw_refresh_stage_() const {
     case DisplayOperationStage::POWER_OFF:
     case DisplayOperationStage::WAIT_POWER_OFF:
     case DisplayOperationStage::DEEP_SLEEP:
-    // POST_REFRESH_DELAY is a mandatory hardware settle window; treat it as an
-    // uninterruptible stage so ensure_initialized_() and cancellation do not
-    // issue SPI commands before the panel is ready to accept them.
-    case DisplayOperationStage::POST_REFRESH_DELAY:
       return true;
     default:
       return false;
