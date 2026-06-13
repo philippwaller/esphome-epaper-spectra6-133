@@ -330,6 +330,10 @@ void HOT EpaperSpectra6133::draw_absolute_pixel_internal(int x, int y, Color col
  * @brief Ensures the display is initialized before any operation that requires it.
  *
  * Returns false immediately if the component is in a failed state (no retry).
+ * Returns false during is_in_hw_refresh_stage_() — this includes POST_REFRESH_DELAY,
+ * which is an uninterruptible hardware settle window; callers must not issue
+ * wake() or initialize() (and therefore no SPI commands) until the stage has
+ * elapsed and loop() has advanced past it.
  * Returns true if already initialized. Otherwise it runs the panel init
  * sequence on demand so later updates can recover from a cold start.
  */
@@ -337,6 +341,12 @@ bool EpaperSpectra6133::ensure_initialized_() {
   // Guard against infinite re-initialization: once mark_failed() has been called,
   // is_failed() returns true permanently and we must not retry.
   if (this->is_failed()) {
+    return false;
+  }
+  // Do not call wake() or initialize() while a hardware stage (including
+  // POST_REFRESH_DELAY) is in progress; the panel cannot accept SPI commands
+  // until the stage has elapsed.
+  if (this->is_in_hw_refresh_stage_()) {
     return false;
   }
   if (this->controller_.is_initialized()) {
@@ -546,6 +556,10 @@ bool EpaperSpectra6133::is_in_hw_refresh_stage_() const {
     case DisplayOperationStage::POWER_OFF:
     case DisplayOperationStage::WAIT_POWER_OFF:
     case DisplayOperationStage::DEEP_SLEEP:
+    // POST_REFRESH_DELAY is a mandatory hardware settle window; treat it as an
+    // uninterruptible stage so ensure_initialized_() and cancellation do not
+    // issue SPI commands before the panel is ready to accept them.
+    case DisplayOperationStage::POST_REFRESH_DELAY:
       return true;
     default:
       return false;
