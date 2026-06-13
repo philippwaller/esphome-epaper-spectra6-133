@@ -131,6 +131,42 @@ class EpaperSpectra6133ComponentTest : public ::testing::Test {
   // Simulate a busy display (BUSY pin LOW = panel executing refresh).
   void set_display_busy(bool busy) { transport_state().mock_busy_level = busy ? 0 : 1; }
 
+  // --- Change-detection / finish-operation accessors ---
+  void set_change_detection_mode(ChangeDetectionMode mode) {
+    display_.set_change_detection_mode(mode);
+  }
+  UpdateRegion detect_changed_region() const { return display_.detect_changed_region(); }
+  void draw_pixel(int x, int y) {
+    display_.draw_absolute_pixel_internal(x, y, esphome::Color(0, 0, 0));
+  }
+  // Returns true if previous_frame_buffer_ is non-null and matches buffer_
+  // exactly over [offset, offset+len).
+  bool previous_frame_matches_buffer(size_t offset, size_t len) const {
+    if (display_.previous_frame_buffer_ == nullptr || display_.buffer_ == nullptr) return false;
+    return std::memcmp(display_.previous_frame_buffer_ + offset, display_.buffer_ + offset, len) == 0;
+  }
+  // Returns true if every byte of previous_frame_buffer_ in [offset, offset+len)
+  // equals expected_byte.
+  bool previous_frame_is_byte(size_t offset, size_t len, uint8_t expected_byte) const {
+    if (display_.previous_frame_buffer_ == nullptr) return false;
+    for (size_t i = 0; i < len; i++) {
+      if (display_.previous_frame_buffer_[offset + i] != expected_byte) return false;
+    }
+    return true;
+  }
+  bool has_previous_frame_buffer() const { return display_.previous_frame_buffer_ != nullptr; }
+  // Allocates previous_frame_buffer_ and fills it with fill_byte.
+  void init_previous_frame_buffer(uint8_t fill_byte) {
+    if (display_.previous_frame_buffer_ == nullptr) {
+      display_.previous_frame_buffer_ = static_cast<uint8_t *>(std::malloc(FULL_FRAME_SIZE));
+    }
+    if (display_.previous_frame_buffer_ != nullptr) {
+      std::memset(display_.previous_frame_buffer_, fill_byte, FULL_FRAME_SIZE);
+    }
+  }
+  // Direct access to buffer_ for test setup.
+  uint8_t *buffer() const { return display_.buffer_; }
+
   EpaperSpectra6133 display_;
 };
 
@@ -566,6 +602,187 @@ TEST_F(EpaperSpectra6133ComponentTest, PowerOffAfterSleepDisablesLoadSwitchAfter
   ASSERT_LT(load_switch_index, operations.size());
   EXPECT_LT(dslp_index, load_switch_index);
   EXPECT_EQ(operations[load_switch_index].level, 0U);
+}
+
+// =============================================================================
+// Finish-operation / change-tracking tests
+//
+// These tests drive a region or full-frame operation all the way to completion
+// and then assert the post-completion state of:
+//   - previous_frame_buffer_  (compare mode)
+//   - tracked_region_         (track mode)
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// Helper: fill a rectangular band of rows in the framebuffer with a sentinel
+// byte value, leave rows outside the band at a different value.
+// Returns the byte value used outside the band.
+// ---------------------------------------------------------------------------
+namespace {
+
+// Fill buffer[y0*ROW_BYTES .. y1*ROW_BYTES) with `fill`, everything else with
+// `other`.  Both operate on the raw packed-nibble layout.
+void fill_rows(uint8_t *buf, int y0, int y1, uint8_t fill, uint8_t other) {
+  const size_t row_bytes = ROW_BYTES;
+  for (int y = 0; y < EPD_HEIGHT; y++) {
+    const uint8_t v = (y >= y0 && y < y1) ? fill : other;
+    std::memset(buf + static_cast<size_t>(y) * row_bytes, v, row_bytes);
+  }
+}
+
+}  // namespace
+
+// Additional fixture helpers (accessed via the friend class).
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// 20. After a full-frame refresh completes, the entire previous_frame_buffer_
+//     matches the current framebuffer (compare mode).
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, FullRefreshSyncsEntirePreviousFrameBuffer) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+
+  // Write a known pattern into the framebuffer.
+  if (buffer() != nullptr) {
+    std::memset(buffer(), 0xAB, FULL_FRAME_SIZE);
+  }
+
+  display_.refresh();
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  // previous_frame_buffer_ must now be a byte-exact copy of buffer_.
+  ASSERT_TRUE(has_previous_frame_buffer());
+  EXPECT_TRUE(previous_frame_matches_buffer(0, FULL_FRAME_SIZE));
+}
+
+// ---------------------------------------------------------------------------
+// 21. After a region refresh completes, only the rows inside the region are
+//     updated in previous_frame_buffer_ (compare mode); rows outside are
+//     unchanged.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshSyncsOnlyRefreshedRowsInPreviousFrameBuffer) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+
+  // Allocate and initialise previous_frame_buffer_ to 0x00.
+  init_previous_frame_buffer(0x00);
+  ASSERT_TRUE(has_previous_frame_buffer());
+
+  // Fill the current framebuffer: rows 100-199 = 0xFF, everything else = 0x11.
+  const int ry = 100, rh = 100;
+  fill_rows(buffer(), ry, ry + rh, 0xFF, 0x11);
+
+  display_.refresh_region(0, ry, EPD_WIDTH, rh);
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  // Rows inside the region must match buffer_ (i.e. 0xFF).
+  for (int y = ry; y < ry + rh; y++) {
+    const size_t row_offset = static_cast<size_t>(y) * ROW_BYTES;
+    EXPECT_TRUE(previous_frame_matches_buffer(row_offset, ROW_BYTES)) << "row " << y << " inside region mismatch";
+  }
+
+  // Rows outside the region must still be 0x00 (untouched).
+  for (int y = 0; y < EPD_HEIGHT; y++) {
+    if (y >= ry && y < ry + rh) continue;
+    const size_t row_offset = static_cast<size_t>(y) * ROW_BYTES;
+    EXPECT_TRUE(previous_frame_is_byte(row_offset, ROW_BYTES, 0x00))
+        << "row " << y << " outside region was modified";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 22. After a full-frame operation completes, tracked_region_ is cleared
+//     (track mode).
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, FullRefreshClearsTrackedRegion) {
+  set_change_detection_mode(ChangeDetectionMode::TRACK);
+
+  draw_pixel(10, 10);
+  EXPECT_FALSE(detect_changed_region().empty());
+
+  display_.refresh();
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  EXPECT_TRUE(detect_changed_region().empty());
+}
+
+// ---------------------------------------------------------------------------
+// 23. After a region refresh that fully contains the tracked dirty rect, the
+//     tracked_region_ is cleared (track mode).
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshThatContainsDirtyRectClearsTracking) {
+  set_change_detection_mode(ChangeDetectionMode::TRACK);
+
+  // Dirty a small area that lies entirely within the region we will refresh.
+  draw_pixel(50, 150);
+  ASSERT_FALSE(detect_changed_region().empty());
+
+  // Refresh a region that completely contains the dirty rect.
+  display_.refresh_region(0, 100, EPD_WIDTH, 200);
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  EXPECT_TRUE(detect_changed_region().empty());
+}
+
+// ---------------------------------------------------------------------------
+// 24. After a region refresh that does NOT fully contain the tracked dirty
+//     rect, the tracked_region_ is preserved (track mode).
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshThatDoesNotContainDirtyRectPreservesTracking) {
+  set_change_detection_mode(ChangeDetectionMode::TRACK);
+
+  // Dirty pixel at row 10, well outside the refresh region below.
+  draw_pixel(100, 10);
+  ASSERT_FALSE(detect_changed_region().empty());
+
+  // Refresh a region that does NOT cover row 10.
+  display_.refresh_region(0, 500, EPD_WIDTH, 200);
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  // The dirty region must still be non-empty — the pixel was never sent.
+  EXPECT_FALSE(detect_changed_region().empty());
+}
+
+// ---------------------------------------------------------------------------
+// 25. After a region refresh, find_changed_region() still finds pixels that
+//     were outside the refreshed area (compare mode end-to-end).
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, CompareModeFindsDirtyPixelsOutsideRefreshedRegion) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+
+  // Perform a full refresh first to establish a clean baseline in previous_frame_buffer_.
+  std::memset(buffer(), 0x11, FULL_FRAME_SIZE);  // all white
+  display_.refresh();
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+  ASSERT_TRUE(has_previous_frame_buffer());
+
+  // Now write changes in two separate bands:
+  //   band A: rows 100-149 (will be refreshed)
+  //   band B: rows 600-649 (will NOT be refreshed — must remain detectable)
+  const uint8_t changed_byte = 0xAA;
+  for (int y = 100; y < 150; y++) {
+    std::memset(buffer() + static_cast<size_t>(y) * ROW_BYTES, changed_byte, ROW_BYTES);
+  }
+  for (int y = 600; y < 650; y++) {
+    std::memset(buffer() + static_cast<size_t>(y) * ROW_BYTES, changed_byte, ROW_BYTES);
+  }
+
+  // Refresh only band A.
+  display_.refresh_region(0, 100, EPD_WIDTH, 50);
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  // Band B changes must still be visible to detect_changed_region().
+  const UpdateRegion remaining = detect_changed_region();
+  EXPECT_FALSE(remaining.empty());
+  // The remaining dirty region must overlap band B (rows 600-649).
+  EXPECT_GE(remaining.y + remaining.height, 600);
+  EXPECT_LT(remaining.y, 650);
 }
 
 }  // namespace epaper_spectra6_133
