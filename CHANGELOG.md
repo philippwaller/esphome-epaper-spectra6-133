@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.3.0...v0.3.1) (2026-06-13)
+
+
+### 🔧 Maintenance
+
+* **deps:** Update codspeedhq/action digest to c145068 ([#56](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/56)) ([0c15324](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/0c153242b54ea2c7be64ec36346055e5f1bd4ccc))
+* **deps:** Update pre-commit hook astral-sh/ruff-pre-commit to v0.15.17 ([#59](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/59)) ([e505949](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/e5059496bc6d913c9cb49919d56ff218b7f749be))
+
 ## [0.3.0](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.2.0...v0.3.0) (2026-06-09)
 
 
