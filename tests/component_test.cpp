@@ -452,9 +452,9 @@ TEST_F(EpaperSpectra6133ComponentTest, IsProcessingReturnsFalseWhenIdle) {
 // ---------------------------------------------------------------------------
 TEST_F(EpaperSpectra6133ComponentTest, ClearFillsBufferWithoutRefresh) {
   // Write a non-white sentinel into the buffer before calling clear().
-  if (display_.buffer_ != nullptr) {
-    std::memset(display_.buffer_, 0x00, FULL_FRAME_SIZE);  // all black
-  }
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  std::memset(buf, 0x00, FULL_FRAME_SIZE);  // all black
 
   display_.clear();
 
@@ -466,9 +466,9 @@ TEST_F(EpaperSpectra6133ComponentTest, ClearFillsBufferWithoutRefresh) {
 // Dispatch through the base DisplayBuffer API to verify the display's white
 // default clear colour is preserved by the override.
 TEST_F(EpaperSpectra6133ComponentTest, BaseClassClearDispatchUsesWhiteWithoutRefresh) {
-  if (display_.buffer_ != nullptr) {
-    std::memset(display_.buffer_, 0x00, FULL_FRAME_SIZE);  // all black
-  }
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  std::memset(buf, 0x00, FULL_FRAME_SIZE);  // all black
 
   // Cast to base class to simulate how ESPHome's internal loop calls clear()
   esphome::display::DisplayBuffer *base_display = &display_;
@@ -480,9 +480,9 @@ TEST_F(EpaperSpectra6133ComponentTest, BaseClassClearDispatchUsesWhiteWithoutRef
 }
 
 TEST_F(EpaperSpectra6133ComponentTest, ClearUsesConfiguredClearColor) {
-  if (display_.buffer_ != nullptr) {
-    std::memset(display_.buffer_, 0x11, FULL_FRAME_SIZE);  // all white
-  }
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  std::memset(buf, 0x11, FULL_FRAME_SIZE);  // all white
 
   display_.set_clear_color(EpaperSpectra6133::BLUE);
   display_.clear();
@@ -643,9 +643,9 @@ TEST_F(EpaperSpectra6133ComponentTest, FullRefreshSyncsEntirePreviousFrameBuffer
   set_change_detection_mode(ChangeDetectionMode::COMPARE);
 
   // Write a known pattern into the framebuffer.
-  if (buffer() != nullptr) {
-    std::memset(buffer(), 0xAB, FULL_FRAME_SIZE);
-  }
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  std::memset(buf, 0xAB, FULL_FRAME_SIZE);
 
   display_.refresh();
   run_loop_until_done();
@@ -670,7 +670,9 @@ TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshSyncsOnlyRefreshedRowsInPrev
 
   // Fill the current framebuffer: rows 100-199 = 0xFF, everything else = 0x11.
   const int ry = 100, rh = 100;
-  fill_rows(buffer(), ry, ry + rh, 0xFF, 0x11);
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  fill_rows(buf, ry, ry + rh, 0xFF, 0x11);
 
   display_.refresh_region(0, ry, EPD_WIDTH, rh);
   run_loop_until_done();
@@ -755,7 +757,9 @@ TEST_F(EpaperSpectra6133ComponentTest, CompareModeFindsDirtyPixelsOutsideRefresh
   set_change_detection_mode(ChangeDetectionMode::COMPARE);
 
   // Perform a full refresh first to establish a clean baseline in previous_frame_buffer_.
-  std::memset(buffer(), 0x11, FULL_FRAME_SIZE);  // all white
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  std::memset(buf, 0x11, FULL_FRAME_SIZE);  // all white
   display_.refresh();
   run_loop_until_done();
   ASSERT_FALSE(display_.is_processing());
@@ -766,10 +770,10 @@ TEST_F(EpaperSpectra6133ComponentTest, CompareModeFindsDirtyPixelsOutsideRefresh
   //   band B: rows 600-649 (will NOT be refreshed — must remain detectable)
   const uint8_t changed_byte = 0xAA;
   for (int y = 100; y < 150; y++) {
-    std::memset(buffer() + static_cast<size_t>(y) * ROW_BYTES, changed_byte, ROW_BYTES);
+    std::memset(buf + static_cast<size_t>(y) * ROW_BYTES, changed_byte, ROW_BYTES);
   }
   for (int y = 600; y < 650; y++) {
-    std::memset(buffer() + static_cast<size_t>(y) * ROW_BYTES, changed_byte, ROW_BYTES);
+    std::memset(buf + static_cast<size_t>(y) * ROW_BYTES, changed_byte, ROW_BYTES);
   }
 
   // Refresh only band A.
