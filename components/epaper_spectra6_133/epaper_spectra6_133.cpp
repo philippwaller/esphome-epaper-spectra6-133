@@ -706,8 +706,10 @@ void EpaperSpectra6133::process_init_stage_() {
   } else if (this->active_operation_.type == DisplayOperationType::UPDATE_REGION ||
              this->active_operation_.type == DisplayOperationType::REFRESH_REGION) {
     this->active_operation_.use_full_frame = false;
+  } else {
+    // UPDATE in full refresh mode and REFRESH use the full-frame path.
+    this->active_operation_.use_full_frame = true;
   }
-  // else: UPDATE (full mode) and REFRESH use the full-frame path.
 
   if (this->active_operation_.use_full_frame) {
     this->active_operation_.current_row = 0;
