@@ -745,6 +745,37 @@ TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshClipsPreviousFrameSyncToPane
   }
 }
 
+TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshSyncsOnlyTransferredByteWindowsInPreviousFrameBuffer) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+  init_previous_frame_buffer(0x00);
+  ASSERT_TRUE(has_previous_frame_buffer());
+
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  std::memset(buf, 0x11, FULL_FRAME_SIZE);
+
+  const int ry = 100;
+  const int rh = 10;
+  const size_t transferred_bytes = 8;  // 16 px at 4 bpp.
+  for (int y = ry; y < ry + rh; y++) {
+    const size_t row_offset = static_cast<size_t>(y) * ROW_BYTES;
+    std::memset(buf + row_offset, 0xFF, transferred_bytes);
+    std::memset(buf + row_offset + HALF_ROW_BYTES, 0xAA, HALF_ROW_BYTES);
+  }
+
+  display_.refresh_region(0, ry, 16, rh);
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  for (int y = ry; y < ry + rh; y++) {
+    const size_t row_offset = static_cast<size_t>(y) * ROW_BYTES;
+    EXPECT_TRUE(previous_frame_matches_buffer(row_offset, transferred_bytes))
+        << "row " << y << " transferred window mismatch";
+    EXPECT_TRUE(previous_frame_is_byte(row_offset + transferred_bytes, ROW_BYTES - transferred_bytes, 0x00))
+        << "row " << y << " non-transferred bytes were modified";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 22. After a full-frame operation completes, tracked_region_ is cleared
 //     (track mode).

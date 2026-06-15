@@ -381,8 +381,8 @@ bool EpaperSpectra6133::ensure_initialized_() {
  * @brief Copies sent pixels from the framebuffer into the previous-frame buffer (compare mode).
  *
  * For full-frame operations the entire buffer is copied. For region operations
- * only the clipped controller rows that were actually sent to the panel
- * are updated; rows outside the refreshed rectangle are left as-is so that
+ * only the clipped controller byte windows that were actually sent to the panel
+ * are updated; pixels outside the refreshed windows are left as-is so that
  * find_changed_region() still sees them as pending on the next cycle.
  */
 void EpaperSpectra6133::update_previous_frame_() {
@@ -405,25 +405,17 @@ void EpaperSpectra6133::update_previous_frame_() {
   if (this->active_operation_.use_full_frame) {
     std::memcpy(this->previous_frame_buffer_, this->buffer_, FULL_FRAME_SIZE);
   } else {
-    // Use the clipped PartialRegion descriptors rather than the caller-provided
-    // logical rectangle, which may be partially outside the panel.
-    int y0 = EPD_HEIGHT;
-    int y1 = 0;
     for (int i = 0; i < 2; i++) {
       if (!this->active_operation_.has_region[i]) {
         continue;
       }
       const PartialRegion &region = this->active_operation_.regions[i];
-      y0 = region.y_start < y0 ? region.y_start : y0;
-      const int region_y1 = static_cast<int>(region.y_start) + static_cast<int>(region.height);
-      y1 = region_y1 > y1 ? region_y1 : y1;
+      for (int row = 0; row < static_cast<int>(region.height); row++) {
+        const size_t offset =
+            (static_cast<size_t>(region.y_start) + static_cast<size_t>(row)) * ROW_BYTES + region.row_byte_offset;
+        std::memcpy(this->previous_frame_buffer_ + offset, this->buffer_ + offset, region.row_byte_count);
+      }
     }
-    if (y0 >= y1) {
-      return;
-    }
-    const size_t offset = static_cast<size_t>(y0) * ROW_BYTES;
-    const size_t len = static_cast<size_t>(y1 - y0) * ROW_BYTES;
-    std::memcpy(this->previous_frame_buffer_ + offset, this->buffer_ + offset, len);
   }
 }
 // =============================================================================
