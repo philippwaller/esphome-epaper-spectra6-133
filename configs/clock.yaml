@@ -61,9 +61,9 @@ esphome:
             - component.update: epaper_display
 
 logger:
-  level: DEBUG
+  level: INFO
   logs:
-    epaper_spectra6_133: DEBUG
+    epaper_spectra6_133: INFO
 
 api:
   encryption:
@@ -186,7 +186,8 @@ display:
     # This example refreshes explicitly from automations instead of on a timer.
     update_interval: never
     auto_clear_enabled: false
-    update_mode: partial
+    refresh_mode: partial
+    change_detection_mode: compare
     cs0_pin: ${epd_cs0_pin}
     cs1_pin: ${epd_cs1_pin}
     clk_pin: ${epd_clk_pin}

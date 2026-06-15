@@ -14,6 +14,8 @@ CONF_BUSY_PIN = "busy_pin"
 CONF_RESET_PIN = "reset_pin"
 CONF_POWER_PIN = "power_pin"
 CONF_CHANGE_DETECTION_MODE = "change_detection_mode"
+CONF_REFRESH_MODE = "refresh_mode"
+# Deprecated YAML option kept for pre-1.0 compatibility. Remove in version 1.0.
 CONF_UPDATE_MODE = "update_mode"
 CONF_CLEAR_COLOR = "clear_color"
 CONF_AUTO_SLEEP = "auto_sleep"
@@ -47,4 +49,4 @@ EpaperSpectra6133 = epaper_spectra6_133_ns.class_(
     "EpaperSpectra6133", display_core.DisplayBuffer
 )
 ChangeDetectionMode = epaper_spectra6_133_ns.enum("ChangeDetectionMode")
-UpdateMode = epaper_spectra6_133_ns.enum("UpdateMode")
+RefreshMode = epaper_spectra6_133_ns.enum("RefreshMode")
