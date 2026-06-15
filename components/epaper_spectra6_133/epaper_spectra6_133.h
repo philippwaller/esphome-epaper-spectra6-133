@@ -42,6 +42,13 @@ enum class RefreshMode {
   PARTIAL,  // Automatically detect the changed region and refresh only that.
 };
 
+/**
+ * @brief Deprecated compatibility alias for RefreshMode.
+ *
+ * @deprecated Use RefreshMode instead. This alias will be removed in version 1.0.
+ */
+using UpdateMode [[deprecated("Use RefreshMode; UpdateMode will be removed in version 1.0.")]] = RefreshMode;
+
 // ---------------------------------------------------------------------------
 // Display operation types and execution stages.
 //
@@ -207,6 +214,13 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   void set_change_detection_mode(ChangeDetectionMode mode) { this->change_detection_mode_ = mode; }
   /** @brief Sets whether update() performs full-frame or auto-partial refresh. */
   void set_refresh_mode(RefreshMode mode) { this->refresh_mode_ = mode; }
+  /**
+   * @brief Deprecated compatibility wrapper for set_refresh_mode().
+   *
+   * @deprecated Use set_refresh_mode() instead. This method will be removed in version 1.0.
+   */
+  [[deprecated("Use set_refresh_mode(); set_update_mode() will be removed in version 1.0.")]]
+  void set_update_mode(RefreshMode mode);
   /** @brief Sets the colour used by clear() and ESPHome's automatic pre-render clear. */
   void set_clear_color(Color color) { this->clear_color_ = color; }
   /**
@@ -286,6 +300,14 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   void refresh();
 
   /**
+   * @brief Deprecated compatibility wrapper for refresh().
+   *
+   * @deprecated Use refresh() instead. This method will be removed in version 1.0.
+   */
+  [[deprecated("Use refresh(); flush() will be removed in version 1.0.")]]
+  void flush();
+
+  /**
    * @brief Schedules a partial framebuffer refresh and returns immediately.
    *
    * The display lambda is NOT re-run.  Only the specified region is
@@ -296,6 +318,14 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
    * @param x, y, width, height  Logical panel rectangle (pixels).
    */
   void refresh_region(int x, int y, int width, int height);
+
+  /**
+   * @brief Deprecated compatibility wrapper for refresh_region().
+   *
+   * @deprecated Use refresh_region() instead. This method will be removed in version 1.0.
+   */
+  [[deprecated("Use refresh_region(); flush_region() will be removed in version 1.0.")]]
+  void flush_region(int x, int y, int width, int height);
 
   /** @brief Returns whether the panel hardware has been initialized and is ready for explicit updates. */
   bool is_ready() const { return this->controller_.is_initialized(); }
@@ -355,6 +385,14 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   bool is_processing() const {
     return this->active_operation_.state != DisplayOperationState::IDLE || this->pending_operation_.has_pending;
   }
+
+  /**
+   * @brief Deprecated compatibility wrapper for is_processing().
+   *
+   * @deprecated Use is_processing() instead. This method will be removed in version 1.0.
+   */
+  [[deprecated("Use is_processing(); is_busy() will be removed in version 1.0.")]]
+  bool is_busy() const;
 
   /**
    * @brief Cancels the current or pending display operation.

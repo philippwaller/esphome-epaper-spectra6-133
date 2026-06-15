@@ -123,6 +123,11 @@ void EpaperSpectra6133::dump_config() {
 /** @brief Returns HARDWARE priority so this component is set up before application-level components. */
 float EpaperSpectra6133::get_setup_priority() const { return setup_priority::HARDWARE; }
 
+void EpaperSpectra6133::set_update_mode(RefreshMode mode) {
+  ESP_LOGW(TAG, "set_update_mode() is deprecated and will be removed in version 1.0; use set_refresh_mode()");
+  this->set_refresh_mode(mode);
+}
+
 /**
  * @brief Schedules a full-frame display update and returns immediately.
  *
@@ -224,6 +229,11 @@ void EpaperSpectra6133::refresh() {
   this->schedule_display_operation_(DisplayOperationType::REFRESH, 0, 0, 0, 0);
 }
 
+void EpaperSpectra6133::flush() {
+  ESP_LOGW(TAG, "flush() is deprecated and will be removed in version 1.0; use refresh()");
+  this->refresh();
+}
+
 /**
  * @brief Schedules a partial framebuffer refresh and returns immediately.
  *
@@ -239,6 +249,16 @@ void EpaperSpectra6133::refresh_region(int x, int y, int width, int height) {
     return;
   }
   this->schedule_display_operation_(DisplayOperationType::REFRESH_REGION, x, y, width, height);
+}
+
+void EpaperSpectra6133::flush_region(int x, int y, int width, int height) {
+  ESP_LOGW(TAG, "flush_region() is deprecated and will be removed in version 1.0; use refresh_region()");
+  this->refresh_region(x, y, width, height);
+}
+
+bool EpaperSpectra6133::is_busy() const {
+  ESP_LOGW(TAG, "is_busy() is deprecated and will be removed in version 1.0; use is_processing()");
+  return this->is_processing();
 }
 
 void EpaperSpectra6133::sleep() {
