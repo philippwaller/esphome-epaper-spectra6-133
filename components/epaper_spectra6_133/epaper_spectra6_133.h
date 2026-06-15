@@ -444,6 +444,8 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   // Display operation management helpers.
   // -------------------------------------------------------------------------
 
+  // Validates readiness or queues behind an uninterruptible active operation.
+  void request_display_operation_(DisplayOperationType type, int x, int y, int w, int h, const char *name);
   // Cancels any active operation and initialises a new one of the given type.
   void schedule_display_operation_(DisplayOperationType type, int x, int y, int w, int h);
   // Dispatches one bounded step for the current operation stage.

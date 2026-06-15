@@ -203,11 +203,7 @@ void EpaperSpectra6133::set_update_mode(RefreshMode mode) {
  */
 void EpaperSpectra6133::update() {
   ESP_LOGD(TAG, "Update requested");
-  if (!this->ensure_initialized_()) {
-    ESP_LOGE(TAG, "Display not ready");
-    return;
-  }
-  this->schedule_display_operation_(DisplayOperationType::UPDATE, 0, 0, 0, 0);
+  this->request_display_operation_(DisplayOperationType::UPDATE, 0, 0, 0, 0, "update");
 }
 
 /**
@@ -263,11 +259,7 @@ void EpaperSpectra6133::clear() { fill_buffer_with_code(this->buffer_, color_to_
  */
 void EpaperSpectra6133::update_region(int x, int y, int width, int height) {
   ESP_LOGD(TAG, "Region update requested: x=%d y=%d w=%d h=%d", x, y, width, height);
-  if (!this->ensure_initialized_()) {
-    ESP_LOGE(TAG, "Display not ready, cannot schedule update_region");
-    return;
-  }
-  this->schedule_display_operation_(DisplayOperationType::UPDATE_REGION, x, y, width, height);
+  this->request_display_operation_(DisplayOperationType::UPDATE_REGION, x, y, width, height, "update_region");
 }
 
 void EpaperSpectra6133::update_region(UpdateRegion region) {
@@ -284,11 +276,7 @@ void EpaperSpectra6133::update_region(UpdateRegion region) {
  */
 void EpaperSpectra6133::refresh() {
   ESP_LOGD(TAG, "Refresh requested");
-  if (!this->ensure_initialized_()) {
-    ESP_LOGE(TAG, "Display not ready, cannot schedule refresh");
-    return;
-  }
-  this->schedule_display_operation_(DisplayOperationType::REFRESH, 0, 0, 0, 0);
+  this->request_display_operation_(DisplayOperationType::REFRESH, 0, 0, 0, 0, "refresh");
 }
 
 void EpaperSpectra6133::flush() {
@@ -306,11 +294,7 @@ void EpaperSpectra6133::flush() {
  */
 void EpaperSpectra6133::refresh_region(int x, int y, int width, int height) {
   ESP_LOGD(TAG, "Refresh region requested: x=%d y=%d w=%d h=%d", x, y, width, height);
-  if (!this->ensure_initialized_()) {
-    ESP_LOGE(TAG, "Display not ready, cannot schedule refresh_region");
-    return;
-  }
-  this->schedule_display_operation_(DisplayOperationType::REFRESH_REGION, x, y, width, height);
+  this->request_display_operation_(DisplayOperationType::REFRESH_REGION, x, y, width, height, "refresh_region");
 }
 
 void EpaperSpectra6133::flush_region(int x, int y, int width, int height) {
@@ -550,6 +534,27 @@ void EpaperSpectra6133::cancel() {
 // ---------------------------------------------------------------------------
 
 /**
+ * @brief Schedules a display operation after readiness checks or safe deferral.
+ *
+ * Requests that arrive while a refresh or post-refresh settle stage is
+ * uninterruptible must be queued before attempting wake()/initialize(); an
+ * auto-sleeping panel may already have reset controller state, but it still
+ * cannot accept SPI traffic until the active operation drains.
+ */
+void EpaperSpectra6133::request_display_operation_(DisplayOperationType type, int x, int y, int w, int h,
+                                                   const char *name) {
+  if (this->active_operation_.state != DisplayOperationState::IDLE && this->is_in_hw_refresh_stage_()) {
+    this->schedule_display_operation_(type, x, y, w, h);
+    return;
+  }
+  if (!this->ensure_initialized_()) {
+    ESP_LOGE(TAG, "Display not ready, cannot schedule %s", name);
+    return;
+  }
+  this->schedule_display_operation_(type, x, y, w, h);
+}
+
+/**
  * @brief Cancels any active display operation and initialises a new one of @p type.
  *
  * If the active operation is in a hardware-refresh stage or post-refresh settle
@@ -755,6 +760,12 @@ void EpaperSpectra6133::process_display_operation_step_() {
 void EpaperSpectra6133::process_init_stage_() {
   if (this->active_operation_.type == DisplayOperationType::SLEEP) {
     this->active_operation_.stage = DisplayOperationStage::DEEP_SLEEP;
+    return;
+  }
+
+  if (!this->ensure_initialized_()) {
+    ESP_LOGE(TAG, "Display not ready, aborting display operation");
+    this->abort_display_operation_();
     return;
   }
 

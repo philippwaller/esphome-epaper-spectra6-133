@@ -427,6 +427,32 @@ TEST_F(EpaperSpectra6133ComponentTest, PendingOperationWaitsForPostRefreshDelay)
   EXPECT_EQ(operation_stage(), DisplayOperationStage::INIT);
 }
 
+TEST_F(EpaperSpectra6133ComponentTest, PendingOperationStartsAfterAutoSleepPostRefreshDelay) {
+  display_.set_auto_sleep(true);
+  display_.refresh();
+
+  for (int i = 0; i < 50000 && operation_stage() != DisplayOperationStage::POST_REFRESH_DELAY; i++) {
+    g_mock_timer_us += 1000LL;
+    display_.loop();
+  }
+  ASSERT_EQ(operation_stage(), DisplayOperationStage::POST_REFRESH_DELAY);
+
+  display_.refresh_region(10, 20, 300, 400);
+  EXPECT_TRUE(operation_cancelled());
+  EXPECT_TRUE(pending_has_pending());
+  EXPECT_EQ(pending_type(), DisplayOperationType::REFRESH_REGION);
+
+  g_mock_timer_us += 10000LL;
+  display_.loop();
+  EXPECT_FALSE(pending_has_pending());
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH_REGION);
+  EXPECT_EQ(operation_stage(), DisplayOperationStage::INIT);
+
+  run_loop_until_done();
+  EXPECT_FALSE(display_.is_processing());
+}
+
 // ---------------------------------------------------------------------------
 // 14. cancel() while a pending operation exists discards the pending operation.
 // ---------------------------------------------------------------------------
