@@ -926,5 +926,96 @@ TEST_F(EpaperSpectra6133ComponentTest, CompareModeFindsDirtyPixelsOutsideRefresh
   EXPECT_LT(remaining.y, 650);
 }
 
+// All tests in this section call deprecated methods intentionally.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
+TEST_F(EpaperSpectra6133ComponentTest, DeprecatedFlushSchedulesRefreshOperation) {
+  display_.flush();
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, DeprecatedFlushCompletesLikeRefresh) {
+  display_.flush();
+  run_loop_until_done();
+  EXPECT_FALSE(display_.is_processing());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, DeprecatedFlushRegionSchedulesRefreshRegionOperation) {
+  display_.flush_region(30, 40, 100, 200);
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH_REGION);
+  EXPECT_EQ(operation_region_x(), 30);
+  EXPECT_EQ(operation_region_y(), 40);
+  EXPECT_EQ(operation_region_width(), 100);
+  EXPECT_EQ(operation_region_height(), 200);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, DeprecatedFlushRegionCompletesLikeRefreshRegion) {
+  display_.flush_region(0, 0, EPD_WIDTH, EPD_HEIGHT);
+  run_loop_until_done();
+  EXPECT_FALSE(display_.is_processing());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, DeprecatedIsBusyMatchesIsProcessingWhenIdle) {
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_EQ(display_.is_busy(), display_.is_processing());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, DeprecatedIsBusyMatchesIsProcessingWhenActive) {
+  display_.refresh();
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(display_.is_busy(), display_.is_processing());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, DeprecatedIsBusyMatchesIsProcessingAfterCompletion) {
+  display_.refresh();
+  run_loop_until_done();
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_EQ(display_.is_busy(), display_.is_processing());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, DeprecatedSetUpdateModeFullBehavesLikeSetRefreshModeFull) {
+  display_.set_update_mode(RefreshMode::FULL);
+
+  // Draw a pixel so PARTIAL mode would detect a non-empty change region.
+  draw_pixel(100, 100);
+
+  display_.update();
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::UPDATE);
+
+  // Advance past INIT so use_full_frame is resolved.
+  g_mock_timer_us += 1000000LL;
+  display_.loop();
+
+  run_loop_until_done();
+  EXPECT_FALSE(display_.is_processing());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, DeprecatedSetUpdateModePartialBehavesLikeSetRefreshModePartial) {
+  display_.set_update_mode(RefreshMode::PARTIAL);
+
+  display_.update();
+
+  display_.loop();
+  EXPECT_FALSE(display_.is_processing());
+}
+
+#pragma GCC diagnostic pop
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+TEST_F(EpaperSpectra6133ComponentTest, UpdateModeAliasValuesMatchRefreshModeValues) {
+  static_assert(static_cast<int>(UpdateMode::FULL) == static_cast<int>(RefreshMode::FULL),
+                "UpdateMode::FULL must equal RefreshMode::FULL");
+  static_assert(static_cast<int>(UpdateMode::PARTIAL) == static_cast<int>(RefreshMode::PARTIAL),
+                "UpdateMode::PARTIAL must equal RefreshMode::PARTIAL");
+  EXPECT_EQ(static_cast<int>(UpdateMode::FULL), static_cast<int>(RefreshMode::FULL));
+  EXPECT_EQ(static_cast<int>(UpdateMode::PARTIAL), static_cast<int>(RefreshMode::PARTIAL));
+}
+#pragma GCC diagnostic pop
+
 }  // namespace epaper_spectra6_133
 }  // namespace esphome
