@@ -43,6 +43,68 @@ static constexpr int64_t POST_REGION_REFRESH_DELAY_US = 300LL * 1000LL;  // 300 
 // can run during long draws and the task watchdog does not reset the device.
 static constexpr uint32_t DRAW_PIXELS_PER_DELAY = 4096;
 
+namespace {
+
+struct HorizontalInterval {
+  int x0;
+  int x1;
+};
+
+bool partial_regions_contain_tracked_region(const PartialRegion regions[2], const bool has_region[2],
+                                            const UpdateRegion &tracked) {
+  if (tracked.empty()) {
+    return true;
+  }
+
+  const int target_x0 = tracked.x;
+  const int target_y0 = tracked.y;
+  const int target_x1 = tracked.x + tracked.width;
+  const int target_y1 = tracked.y + tracked.height;
+  HorizontalInterval intervals[2];
+  int interval_count = 0;
+
+  for (int i = 0; i < 2; i++) {
+    if (!has_region[i]) {
+      continue;
+    }
+    const PartialRegion &region = regions[i];
+    const int region_y0 = region.y_start;
+    const int region_y1 = static_cast<int>(region.y_start) + static_cast<int>(region.height);
+    if (region_y0 > target_y0 || region_y1 < target_y1) {
+      continue;
+    }
+
+    const int half_start = region.cs_index == 0 ? 0 : EPD_WIDTH / 2;
+    intervals[interval_count++] = {
+        half_start + static_cast<int>(region.x_start),
+        half_start + static_cast<int>(region.x_start) + static_cast<int>(region.width),
+    };
+  }
+
+  if (interval_count == 2 && intervals[1].x0 < intervals[0].x0) {
+    const HorizontalInterval tmp = intervals[0];
+    intervals[0] = intervals[1];
+    intervals[1] = tmp;
+  }
+
+  int covered_until = target_x0;
+  for (int i = 0; i < interval_count; i++) {
+    if (intervals[i].x1 <= covered_until) {
+      continue;
+    }
+    if (intervals[i].x0 > covered_until) {
+      return false;
+    }
+    covered_until = intervals[i].x1;
+    if (covered_until >= target_x1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
 EpaperSpectra6133::EpaperSpectra6133() : controller_(this->transport_) {}
 
 /**
@@ -583,15 +645,9 @@ void EpaperSpectra6133::finish_display_operation_() {
   if (this->active_operation_.use_full_frame) {
     this->reset_change_tracking();
   } else {
-    // Only discard the tracked dirty region if it falls entirely within the
-    // rectangle that was just sent to the panel; otherwise pending pixels
-    // outside the refreshed area must be preserved for the next cycle.
     const UpdateRegion &tr = this->tracked_region_;
-    const int rx = this->active_operation_.region_x;
-    const int ry = this->active_operation_.region_y;
-    const int rx2 = rx + this->active_operation_.region_width;
-    const int ry2 = ry + this->active_operation_.region_height;
-    if (tr.empty() || (tr.x >= rx && tr.y >= ry && tr.x + tr.width <= rx2 && tr.y + tr.height <= ry2)) {
+    if (partial_regions_contain_tracked_region(this->active_operation_.regions, this->active_operation_.has_region,
+                                               tr)) {
       this->reset_change_tracking();
     }
   }

@@ -812,6 +812,34 @@ TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshThatContainsDirtyRectClearsT
   EXPECT_TRUE(detect_changed_region().empty());
 }
 
+TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshClearsTrackingInsideAlignedPartialWindow) {
+  set_change_detection_mode(ChangeDetectionMode::TRACK);
+
+  // The requested 1 px wide region is expanded by the controller to the
+  // minimum 16 px partial window, so this dirty pixel is actually transferred.
+  draw_pixel(10, 100);
+  ASSERT_FALSE(detect_changed_region().empty());
+
+  display_.refresh_region(0, 100, 1, 2);
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  EXPECT_TRUE(detect_changed_region().empty());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshPreservesTrackingOutsideTransferredHalf) {
+  set_change_detection_mode(ChangeDetectionMode::TRACK);
+
+  draw_pixel(700, 100);
+  ASSERT_FALSE(detect_changed_region().empty());
+
+  display_.refresh_region(0, 100, 16, 2);
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  EXPECT_FALSE(detect_changed_region().empty());
+}
+
 // ---------------------------------------------------------------------------
 // 24. After a region refresh that does NOT fully contain the tracked dirty
 //     rect, the tracked_region_ is preserved (track mode).
