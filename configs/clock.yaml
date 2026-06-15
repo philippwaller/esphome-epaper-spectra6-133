@@ -61,9 +61,9 @@ esphome:
             - component.update: epaper_display
 
 logger:
-  level: DEBUG
+  level: INFO
   logs:
-    epaper_spectra6_133: DEBUG
+    epaper_spectra6_133: INFO
 
 api:
   encryption:

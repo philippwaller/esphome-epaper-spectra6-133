@@ -32,6 +32,9 @@ psram:
   speed: 80MHz
 
 logger:
+  level: INFO
+  logs:
+    epaper_spectra6_133: INFO
 
 wifi:
   ssid: !secret wifi_ssid
