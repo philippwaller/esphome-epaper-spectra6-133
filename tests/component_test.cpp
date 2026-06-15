@@ -294,7 +294,7 @@ TEST_F(EpaperSpectra6133ComponentTest, RefreshRegionSchedulesCorrectOperationTyp
 // ---------------------------------------------------------------------------
 // Extra: update() while another operation is active supersedes the previous operation.
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, UpdateSupersedessActiveOperation) {
+TEST_F(EpaperSpectra6133ComponentTest, UpdateSupersedesActiveOperation) {
   display_.refresh();
   EXPECT_TRUE(display_.is_processing());
   EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH);
@@ -397,6 +397,34 @@ TEST_F(EpaperSpectra6133ComponentTest, PendingOperationStartsAfterRefreshDrains)
   EXPECT_EQ(operation_region_y(), 20);
   EXPECT_EQ(operation_region_width(), 300);
   EXPECT_EQ(operation_region_height(), 400);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, PendingOperationWaitsForPostRefreshDelay) {
+  display_.set_auto_sleep(false);
+  display_.refresh();
+
+  for (int i = 0; i < 50000 && operation_stage() != DisplayOperationStage::POST_REFRESH_DELAY; i++) {
+    g_mock_timer_us += 1000LL;
+    display_.loop();
+  }
+  ASSERT_EQ(operation_stage(), DisplayOperationStage::POST_REFRESH_DELAY);
+
+  display_.refresh_region(10, 20, 300, 400);
+  EXPECT_TRUE(operation_cancelled());
+  EXPECT_TRUE(pending_has_pending());
+
+  // The replacement must wait for the settle window even though BUSY is already high.
+  g_mock_timer_us += 9000LL;
+  display_.loop();
+  EXPECT_TRUE(operation_cancelled());
+  EXPECT_TRUE(pending_has_pending());
+
+  g_mock_timer_us += 1000LL;
+  display_.loop();
+  EXPECT_FALSE(pending_has_pending());
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH_REGION);
+  EXPECT_EQ(operation_stage(), DisplayOperationStage::INIT);
 }
 
 // ---------------------------------------------------------------------------
@@ -690,6 +718,30 @@ TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshSyncsOnlyRefreshedRowsInPrev
     const size_t row_offset = static_cast<size_t>(y) * ROW_BYTES;
     EXPECT_TRUE(previous_frame_is_byte(row_offset, ROW_BYTES, 0x00))
         << "row " << y << " outside region was modified";
+  }
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshClipsPreviousFrameSyncToPanelRows) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+  init_previous_frame_buffer(0x00);
+  ASSERT_TRUE(has_previous_frame_buffer());
+
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  fill_rows(buf, 0, 10, 0xFF, 0x11);
+
+  display_.refresh_region(0, -10, EPD_WIDTH, 20);
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  for (int y = 0; y < 10; y++) {
+    const size_t row_offset = static_cast<size_t>(y) * ROW_BYTES;
+    EXPECT_TRUE(previous_frame_matches_buffer(row_offset, ROW_BYTES)) << "row " << y << " clipped region mismatch";
+  }
+  for (int y = 10; y < EPD_HEIGHT; y++) {
+    const size_t row_offset = static_cast<size_t>(y) * ROW_BYTES;
+    EXPECT_TRUE(previous_frame_is_byte(row_offset, ROW_BYTES, 0x00))
+        << "row " << y << " outside clipped region was modified";
   }
 }
 

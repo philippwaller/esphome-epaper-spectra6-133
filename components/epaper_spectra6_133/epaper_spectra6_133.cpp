@@ -352,11 +352,10 @@ void HOT EpaperSpectra6133::draw_absolute_pixel_internal(int x, int y, Color col
  * Returns false immediately if the component is in a failed state (no retry).
  * Returns true if already initialized — this is safe to call even during an
  * active hardware stage, because no SPI commands are issued.
- * Returns false (deferring wake/initialize) when a hardware stage or the
- * POST_REFRESH_DELAY settle window is in progress; wake() and initialize()
- * must not send SPI commands until the panel is ready.  POST_REFRESH_DELAY is
- * checked separately because it is a timer-based delay not covered by
- * is_in_hw_refresh_stage_(), which is coupled to BUSY-pin polling.
+ * Returns false (deferring wake/initialize) when a hardware stage is in progress;
+ * wake() and initialize() must not send SPI commands until the panel is ready.
+ * is_in_hw_refresh_stage_() includes the timer-based POST_REFRESH_DELAY settle
+ * window even though that stage is not represented by BUSY-pin polling.
  */
 bool EpaperSpectra6133::ensure_initialized_() {
   // Guard against infinite re-initialization: once mark_failed() has been called,
@@ -367,10 +366,9 @@ bool EpaperSpectra6133::ensure_initialized_() {
   if (this->controller_.is_initialized()) {
     return true;
   }
-  // Do not call wake() or initialize() while a hardware stage or the
-  // POST_REFRESH_DELAY settle window is in progress; the panel cannot accept
-  // SPI commands until the stage has elapsed.
-  if (this->is_in_hw_refresh_stage_() || this->active_operation_.stage == DisplayOperationStage::POST_REFRESH_DELAY) {
+  // Do not call wake() or initialize() while a hardware stage is in progress;
+  // the panel cannot accept SPI commands until the stage has elapsed.
+  if (this->is_in_hw_refresh_stage_()) {
     return false;
   }
   if (this->sleeping_) {
@@ -382,8 +380,8 @@ bool EpaperSpectra6133::ensure_initialized_() {
 /**
  * @brief Copies sent pixels from the framebuffer into the previous-frame buffer (compare mode).
  *
- * For full-frame operations the entire buffer is copied.  For region operations
- * only the rows that were actually sent to the panel ([region_y, region_y+region_height))
+ * For full-frame operations the entire buffer is copied. For region operations
+ * only the clipped controller rows that were actually sent to the panel
  * are updated; rows outside the refreshed rectangle are left as-is so that
  * find_changed_region() still sees them as pending on the next cycle.
  */
@@ -407,9 +405,22 @@ void EpaperSpectra6133::update_previous_frame_() {
   if (this->active_operation_.use_full_frame) {
     std::memcpy(this->previous_frame_buffer_, this->buffer_, FULL_FRAME_SIZE);
   } else {
-    // Only sync the rows covered by the region that was sent to the panel.
-    const int y0 = this->active_operation_.region_y;
-    const int y1 = y0 + this->active_operation_.region_height;
+    // Use the clipped PartialRegion descriptors rather than the caller-provided
+    // logical rectangle, which may be partially outside the panel.
+    int y0 = EPD_HEIGHT;
+    int y1 = 0;
+    for (int i = 0; i < 2; i++) {
+      if (!this->active_operation_.has_region[i]) {
+        continue;
+      }
+      const PartialRegion &region = this->active_operation_.regions[i];
+      y0 = region.y_start < y0 ? region.y_start : y0;
+      const int region_y1 = static_cast<int>(region.y_start) + static_cast<int>(region.height);
+      y1 = region_y1 > y1 ? region_y1 : y1;
+    }
+    if (y0 >= y1) {
+      return;
+    }
     const size_t offset = static_cast<size_t>(y0) * ROW_BYTES;
     const size_t len = static_cast<size_t>(y1 - y0) * ROW_BYTES;
     std::memcpy(this->previous_frame_buffer_ + offset, this->buffer_ + offset, len);
@@ -427,9 +438,9 @@ void EpaperSpectra6133::update_previous_frame_() {
  *
  * When an operation is in CANCELLING state while the panel is physically busy
  * (for example, in the middle of a DRF refresh), this method keeps polling until BUSY is
- * released before tearing down hardware state.  This prevents sending SPI
- * commands to a busy panel and ensures software state stays in sync with
- * the physical hardware.
+ * released before tearing down hardware state. It also lets POST_REFRESH_DELAY
+ * finish before cleanup, because that settle window is SPI-unsafe even though
+ * BUSY has already returned high.
  */
 void EpaperSpectra6133::loop() {
   if (this->active_operation_.state == DisplayOperationState::IDLE) {
@@ -439,8 +450,16 @@ void EpaperSpectra6133::loop() {
     // If the panel is physically committed to a refresh (BUSY pin LOW), wait
     // for it to complete before tearing down.  Calling disable_partial_regions()
     // or starting a new operation while BUSY is asserted is undefined per the datasheet.
-    if (this->is_in_hw_refresh_stage_() && this->controller_.is_display_busy()) {
-      return;  // panel still busy; poll again next loop()
+    if (this->is_in_hw_refresh_stage_()) {
+      if (this->active_operation_.stage == DisplayOperationStage::POST_REFRESH_DELAY) {
+        const int64_t delay_us =
+            this->active_operation_.use_full_frame ? POST_FULL_REFRESH_DELAY_US : POST_REGION_REFRESH_DELAY_US;
+        if ((esp_timer_get_time() - this->active_operation_.stage_start_us) < delay_us) {
+          return;  // settle window still active; poll again next loop()
+        }
+      } else if (this->controller_.is_display_busy()) {
+        return;  // panel still busy; poll again next loop()
+      }
     }
     this->abort_display_operation_();
     return;
@@ -459,8 +478,9 @@ void EpaperSpectra6133::loop() {
  * Cancellation takes effect at the next loop() call boundary (i.e. after the
  * current in-flight SPI transaction completes).  CS pins and partial-region
  * state are cleaned up in the following loop() invocation.
- * If the panel is physically in a hardware refresh stage (BUSY pin LOW), the
- * operation is marked as CANCELLING and loop() drains it safely once BUSY clears.
+ * If the panel is physically in a hardware refresh stage or post-refresh settle
+ * window, the operation is marked as CANCELLING and loop() drains it safely once
+ * the stage has completed.
  */
 void EpaperSpectra6133::cancel() {
   this->pending_operation_ = {};  // discard any operation waiting behind the active one
@@ -478,12 +498,11 @@ void EpaperSpectra6133::cancel() {
 /**
  * @brief Cancels any active display operation and initialises a new one of @p type.
  *
- * If the active operation is in a hardware-refresh stage where the panel is
- * physically busy (WAIT_POWER_ON through WAIT_POWER_OFF), the hardware cannot be
- * interrupted mid-cycle.  In that case the active operation is marked cancelled so
- * loop() can drain it gracefully, and the new request is stored as a pending
- * operation. abort_display_operation_() will start the pending operation automatically once the
- * draining refresh completes and BUSY is released.
+ * If the active operation is in a hardware-refresh stage or post-refresh settle
+ * window, the hardware cannot be interrupted safely. In that case the active
+ * operation is marked cancelled so loop() can drain it gracefully, and the new
+ * request is stored as a pending operation. abort_display_operation_() will start
+ * the pending operation automatically once the draining refresh has completed.
  *
  * For all other stages (data-transfer or idle) the active operation is aborted
  * inline and the new operation starts immediately.
@@ -491,8 +510,8 @@ void EpaperSpectra6133::cancel() {
 void EpaperSpectra6133::schedule_display_operation_(DisplayOperationType type, int x, int y, int w, int h) {
   if (this->active_operation_.state != DisplayOperationState::IDLE) {
     if (this->is_in_hw_refresh_stage_()) {
-      // Panel is physically committed to a refresh; we cannot abort inline.
-      // Queue the incoming request so it starts after the refresh drains.
+      // Panel is physically committed to a refresh or settle window; we cannot
+      // abort inline. Queue the request so it starts after the stage drains.
       ESP_LOGD(TAG, "Display operation deferred: panel in refresh stage, will start after drain");
       this->active_operation_.state = DisplayOperationState::CANCELLING;
       this->pending_operation_.has_pending = true;
@@ -524,9 +543,9 @@ void EpaperSpectra6133::schedule_display_operation_(DisplayOperationType type, i
  *
  * Always releases all CS pins and disables partial-region mode so the
  * display controller is left in a known-safe state for the next operation,
- * regardless of which stage was interrupted.  By the time this is called,
- * the BUSY pin has already been released (loop() waits for it before calling
- * here), so sending disable_partial_regions() via SPI is safe.
+ * regardless of which stage was interrupted. By the time this is called, BUSY
+ * has already been released and any POST_REFRESH_DELAY settle window has elapsed,
+ * so sending disable_partial_regions() via SPI is safe.
  *
  * If a pending operation was queued while we were draining a refresh stage, it
  * is started immediately so is_processing() remains true without a gap.
@@ -597,10 +616,10 @@ void EpaperSpectra6133::finish_display_operation_() {
  * @brief Returns true if the current operation stage may have the panel physically busy.
  *
  * Stages from POWER_ON through WAIT_POWER_OFF encompass the panel's power-on,
- * display-refresh, and power-off sequence.  During these stages the BUSY pin
- * may be LOW and SPI commands must not be sent until it goes HIGH again.
- * Cancellation checks this before calling abort_display_operation_() to avoid
- * interleaving new SPI traffic with an in-progress hardware refresh.
+ * display-refresh, and power-off sequence. During these stages the BUSY pin may
+ * be LOW and SPI commands must not be sent until it goes HIGH again.
+ * POST_REFRESH_DELAY is also included because the panel still needs a
+ * timing-sensitive settle window before cleanup or replacement SPI traffic.
  */
 bool EpaperSpectra6133::is_in_hw_refresh_stage_() const {
   switch (this->active_operation_.stage) {
@@ -612,6 +631,7 @@ bool EpaperSpectra6133::is_in_hw_refresh_stage_() const {
     case DisplayOperationStage::POWER_OFF:
     case DisplayOperationStage::WAIT_POWER_OFF:
     case DisplayOperationStage::DEEP_SLEEP:
+    case DisplayOperationStage::POST_REFRESH_DELAY:
       return true;
     default:
       return false;
