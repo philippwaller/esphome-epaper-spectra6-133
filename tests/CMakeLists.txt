@@ -68,6 +68,7 @@ if(BUILD_TESTING)
     support/transport_stub.cpp
     ../components/epaper_spectra6_133/epaper_spectra6_133_controller.cpp
     ../components/epaper_spectra6_133/epaper_spectra6_133_framebuffer.cpp
+    ../components/epaper_spectra6_133/epaper_spectra6_133_operation.cpp
     ../components/epaper_spectra6_133/epaper_spectra6_133.cpp
   )
 
@@ -79,6 +80,13 @@ if(BUILD_TESTING)
   )
 
   target_link_libraries(epaper_spectra6_133_component_tests PRIVATE GTest::gtest_main)
+  target_compile_definitions(
+    epaper_spectra6_133_component_tests
+    PRIVATE
+      USE_LOGGER
+      USE_LOGGER_RUNTIME_TAG_LEVELS
+      ESPHOME_LOG_LEVEL=6
+  )
   enable_coverage_if_requested(epaper_spectra6_133_component_tests)
 
   include(GoogleTest)
@@ -106,6 +114,7 @@ if(ENABLE_BENCHMARKS)
     support/transport_stub.cpp
     ../components/epaper_spectra6_133/epaper_spectra6_133_controller.cpp
     ../components/epaper_spectra6_133/epaper_spectra6_133_framebuffer.cpp
+    ../components/epaper_spectra6_133/epaper_spectra6_133_operation.cpp
     ../components/epaper_spectra6_133/epaper_spectra6_133.cpp
   )
 

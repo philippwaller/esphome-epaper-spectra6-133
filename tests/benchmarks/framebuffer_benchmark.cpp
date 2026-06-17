@@ -178,7 +178,7 @@ void BM_ColorMapping(benchmark::State &state, PixelFactory make_pixels) {
 
   for (auto _ : state) {
     for (const Color &color : pixels) {
-      checksum += color_to_code(color);
+      checksum += color_to_code(color.red, color.green, color.blue);
     }
     benchmark::DoNotOptimize(checksum);
   }

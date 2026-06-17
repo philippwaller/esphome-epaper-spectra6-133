@@ -668,7 +668,49 @@ When `auto_sleep` is enabled, `update()`, `update_region()`, `refresh()`, and `r
 
 ---
 
-### 11. Access the component version at runtime
+### 11. Measure pipeline performance
+
+To inspect where display time is spent, enable the dedicated performance log tag:
+
+```yaml
+logger:
+  level: DEBUG
+  initial_level: INFO
+  logs:
+    epaper_spectra6_133.perf: DEBUG
+```
+
+The component then logs one compact timing summary after each display operation. The measurement is disabled unless this tag is set to `DEBUG` or more verbose, so normal operation does not perform timer reads or timing aggregation.
+
+Example output:
+
+```text
+perf update full result=completed total=12345ms render=2667ms transfer_left=410ms transfer_right=408ms wait_refresh=9300ms deep_sleep=12ms
+```
+
+For live stage tracking, raise the compile-time logger level and the performance tag to `VERBOSE`:
+
+```yaml
+logger:
+  level: VERBOSE
+  initial_level: INFO
+  logs:
+    epaper_spectra6_133.perf: VERBOSE
+```
+
+This keeps the normal runtime log level at `INFO`, but emits one live line whenever a measured pipeline stage finishes:
+
+```text
+perf stage update full render=2667ms total=2670ms
+perf stage update full transfer_left=410ms total=3080ms
+perf stage update full wait_refresh=9300ms total=12330ms
+```
+
+Use this when tuning lambdas, partial refresh regions, SPI throughput, or BUSY timing. Keep the tag disabled for day-to-day operation unless you are actively diagnosing performance.
+
+---
+
+### 12. Access the component version at runtime
 
 The component exposes its release version as a compile-time constant. Use it for diagnostics, on-device display, or custom update checks.
 
@@ -693,7 +735,7 @@ text_sensor:
 
 The version is also logged during startup in the `dump_config()` output.
 
-### 12. Check for component updates
+### 13. Check for component updates
 
 This repository includes an optional package that periodically queries the latest GitHub release and compares it against the installed version. It exposes three Home Assistant diagnostic entities:
 
@@ -703,7 +745,8 @@ This repository includes an optional package that periodically queries the lates
 | Latest Version | text_sensor | Most recent release on GitHub |
 | Update Available | binary_sensor | `true` when a newer release exists |
 
-The check runs every 6 hours and requires no additional configuration beyond including the package.
+The first check runs 60 seconds after boot, then every 6 hours. It requires no additional
+configuration beyond including the package.
 
 Add the package to your configuration:
 

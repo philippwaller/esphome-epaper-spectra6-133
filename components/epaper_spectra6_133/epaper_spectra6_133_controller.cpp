@@ -9,9 +9,6 @@
 #include <cstring>
 
 #include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esphome/core/application.h"
 
 namespace esphome {
 namespace epaper_spectra6_133 {
@@ -227,7 +224,7 @@ bool Controller::refresh() {
  * @brief Transfers the entire logical framebuffer to both driver ICs.
  *
  * Each controller half receives one contiguous 300-byte slice per row,
- * with watchdog feeds and short delays inserted between rows.
+ * with short runtime-hook yields inserted between rows.
  * Uses the step-based begin/write/end primitives so the cooperative operation path
  * can reuse the same streaming logic.
  */
@@ -247,8 +244,7 @@ bool Controller::transfer_full_frame(const uint8_t *framebuffer) {
         return false;
       }
       if ((row & 0x0F) == 0) {
-        App.feed_wdt();
-        vTaskDelay(pdMS_TO_TICKS(1));
+        this->transport_.delay_ms(1);
       }
     }
     this->end_half_transfer();
@@ -258,7 +254,7 @@ bool Controller::transfer_full_frame(const uint8_t *framebuffer) {
     return false;
   }
 
-  vTaskDelay(pdMS_TO_TICKS(10));
+  this->transport_.delay_ms(10);
   return true;
 }
 
@@ -331,8 +327,7 @@ bool Controller::transfer_region(const uint8_t *framebuffer, int x, int y, int w
         return fail();
       }
       if ((row & 0x0F) == 0) {
-        App.feed_wdt();
-        vTaskDelay(pdMS_TO_TICKS(1));
+        this->transport_.delay_ms(1);
       }
     }
     this->end_region_transfer(region.cs_index);

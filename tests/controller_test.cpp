@@ -1,10 +1,10 @@
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <vector>
 
 #include <gtest/gtest.h>
 
-#include "esphome/core/application.h"
 #include "epaper_spectra6_133_controller.h"
 #include "transport_test_support.h"
 
@@ -132,6 +132,16 @@ TEST_F(ControllerTest, TransferFullFrameReturnsFalseForNullFramebuffer) {
   EXPECT_TRUE(state().operations.empty());
 }
 
+TEST_F(ControllerTest, TransferFullFrameUsesTransportDelayHook) {
+  const auto framebuffer = make_framebuffer_pattern();
+
+  ASSERT_TRUE(controller_.transfer_full_frame(framebuffer.data()));
+
+  const auto delay_values = delays(state().operations);
+  EXPECT_EQ(std::count(delay_values.begin(), delay_values.end(), 1U), 200);
+  EXPECT_NE(std::find(delay_values.begin(), delay_values.end(), 10U), delay_values.end());
+}
+
 TEST_F(ControllerTest, TransferRegionAlignsSingleHalfAndArmsDummyRegionOnOtherHalf) {
   const auto framebuffer = make_framebuffer_pattern();
 
@@ -154,7 +164,7 @@ TEST_F(ControllerTest, TransferRegionAlignsSingleHalfAndArmsDummyRegionOnOtherHa
   }
 
   EXPECT_TRUE(filter_data_writes_by_cs_levels(state().operations, {1, 0}).empty());
-  EXPECT_EQ(App.feed_wdt_calls, 1);
+  EXPECT_EQ(delays(state().operations), (std::vector<uint32_t>{1U, 30U, 300U}));
 }
 
 TEST_F(ControllerTest, TransferRegionReturnsFalseForRectanglesOutsidePanel) {

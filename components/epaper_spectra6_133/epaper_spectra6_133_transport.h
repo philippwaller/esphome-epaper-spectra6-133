@@ -15,6 +15,21 @@ namespace esphome {
 namespace epaper_spectra6_133 {
 
 /**
+ * @brief Runtime services used by low-level blocking paths.
+ *
+ * Transport falls back to ESP-IDF/FreeRTOS delay primitives when no hook is
+ * installed. The ESPHome-facing component may install an implementation that
+ * feeds ESPHome's watchdog before yielding, without making this transport
+ * layer depend on ESPHome application bindings.
+ */
+class PanelRuntimeHooks {
+ public:
+  virtual ~PanelRuntimeHooks() = default;
+  /** @brief Yields or sleeps for the requested number of milliseconds. */
+  virtual void yield_for_milliseconds(uint32_t ms) = 0;
+};
+
+/**
  * Low-level GPIO and SPI access for the two-chip GDEP133C02 panel.
  *
  * The panel shares one SPI peripheral but exposes two manual chip-select
@@ -23,6 +38,9 @@ namespace epaper_spectra6_133 {
  */
 class Transport {
  public:
+  /** @brief Installs optional runtime hooks for blocking waits and delays. */
+  void set_runtime_hooks(PanelRuntimeHooks *hooks) { this->runtime_hooks_ = hooks; }
+
   /** @brief Sets the SPI host peripheral used by the panel transport. */
   void set_spi_host(int host) { this->spi_host_ = static_cast<spi_host_device_t>(host); }
   /** @brief Sets the chip-select pin for controller half 0. */
@@ -113,6 +131,7 @@ class Transport {
   gpio_num_t power_pin_{GPIO_NUM_NC};
   spi_host_device_t spi_host_{SPI3_HOST};
   spi_device_handle_t spi_{nullptr};
+  PanelRuntimeHooks *runtime_hooks_{nullptr};
 };
 
 }  // namespace epaper_spectra6_133

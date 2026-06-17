@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "esp_timer.h"  // provides g_mock_timer_us
+#include "esphome/components/logger/logger.h"
 #include "esphome/core/application.h"
 #include "epaper_spectra6_133.h"
 #include "transport_test_support.h"
@@ -87,7 +88,12 @@ class EpaperSpectra6133ComponentTest : public ::testing::Test {
 
     // Allocate the framebuffer (same path as setup() but without GPIO/SPI).
     display_.init_internal_(FULL_FRAME_SIZE);
+    logger_.set_log_level(ESPHOME_LOG_LEVEL_INFO);
+    logger::global_logger = &logger_;
+
   }
+
+  void TearDown() override { logger::global_logger = nullptr; }
 
   // Drain the cooperative operation loop until the operation completes or the step limit is exceeded.
   // g_mock_timer_us is advanced by 1 s each step so that all delay stages
@@ -100,17 +106,25 @@ class EpaperSpectra6133ComponentTest : public ::testing::Test {
     }
   }
 
-  // --- Accessors wrapping private member access (allowed via friend) ---
-  DisplayOperationType operation_type() const { return display_.active_operation_.type; }
-  DisplayOperationStage operation_stage() const { return display_.active_operation_.stage; }
-  bool operation_cancelled() const { return display_.active_operation_.state == DisplayOperationState::CANCELLING; }
-  int operation_region_x() const { return display_.active_operation_.region_x; }
-  int operation_region_y() const { return display_.active_operation_.region_y; }
-  int operation_region_width() const { return display_.active_operation_.region_width; }
-  int operation_region_height() const { return display_.active_operation_.region_height; }
-  bool pending_has_pending() const { return display_.pending_operation_.has_pending; }
-  DisplayOperationType pending_type() const { return display_.pending_operation_.type; }
-  bool is_in_hw_refresh_stage() const { return display_.is_in_hw_refresh_stage_(); }
+  // --- Accessors wrapping executor state (allowed via friend on executor) ---
+  DisplayOperationType operation_type() const { return display_.executor_.active_operation().type; }
+  DisplayOperationStage operation_stage() const { return display_.executor_.active_operation().stage; }
+  bool operation_cancelled() const {
+    return display_.executor_.active_operation().state == DisplayOperationState::CANCELLING;
+  }
+  int operation_region_x() const { return display_.executor_.active_operation().region_x; }
+  int operation_region_y() const { return display_.executor_.active_operation().region_y; }
+  int operation_region_width() const { return display_.executor_.active_operation().region_width; }
+  int operation_region_height() const { return display_.executor_.active_operation().region_height; }
+  bool pending_has_pending() const { return display_.executor_.pending_operation().has_pending; }
+  DisplayOperationType pending_type() const { return display_.executor_.pending_operation().type; }
+  bool is_in_hw_refresh_stage() const { return display_.executor_.is_in_hw_refresh_stage(); }
+  const DisplayPerformanceMetrics &last_performance_metrics() const {
+    return display_.executor_.last_performance_metrics();
+  }
+  int64_t performance_bucket_us(DisplayPerformanceBucket bucket) const {
+    return last_performance_metrics().buckets_us[static_cast<uint8_t>(bucket)];
+  }
   bool buffer_is_filled_with(uint8_t color_code) const {
     const uint8_t packed = static_cast<uint8_t>((color_code << 4) | color_code);
     if (display_.buffer_ == nullptr) {
@@ -135,6 +149,14 @@ class EpaperSpectra6133ComponentTest : public ::testing::Test {
   void set_change_detection_mode(ChangeDetectionMode mode) {
     display_.set_change_detection_mode(mode);
   }
+  void set_refresh_mode(RefreshMode mode) { display_.set_refresh_mode(mode); }
+  void enable_perf_logging() {
+    logger_.set_log_level("epaper_spectra6_133.perf", ESPHOME_LOG_LEVEL_DEBUG);
+  }
+  void enable_live_perf_logging() {
+    logger_.set_log_level("epaper_spectra6_133.perf", ESPHOME_LOG_LEVEL_VERBOSE);
+  }
+  bool is_live_perf_tracking_active() const { return display_.executor_.performance_live_tracking_active_; }
   UpdateRegion detect_changed_region() const { return display_.detect_changed_region(); }
   void draw_pixel(int x, int y) {
     display_.draw_absolute_pixel_internal(x, y, esphome::Color(0, 0, 0));
@@ -168,6 +190,7 @@ class EpaperSpectra6133ComponentTest : public ::testing::Test {
   uint8_t *buffer() const { return display_.buffer_; }
 
   EpaperSpectra6133 display_;
+  logger::Logger logger_;
 };
 
 // ---------------------------------------------------------------------------
@@ -180,6 +203,15 @@ TEST_F(EpaperSpectra6133ComponentTest, UpdateSchedulesOperation) {
   EXPECT_EQ(operation_type(), DisplayOperationType::UPDATE);
 }
 
+TEST_F(EpaperSpectra6133ComponentTest, UpdateDoesNotScheduleWhenDisplayIsFailed) {
+  display_.mark_failed();
+
+  display_.update();
+
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::NONE);
+}
+
 // ---------------------------------------------------------------------------
 // 2. Completing the scheduled operation resets is_processing() to false.
 // ---------------------------------------------------------------------------
@@ -188,6 +220,56 @@ TEST_F(EpaperSpectra6133ComponentTest, OperationCompletionClearsProcessing) {
   EXPECT_TRUE(display_.is_processing());
 
   run_loop_until_done();
+  EXPECT_FALSE(display_.is_processing());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, PerformanceMetricsStayInactiveWhenPerfTagIsNotDebug) {
+  display_.refresh();
+  run_loop_until_done();
+
+  EXPECT_FALSE(last_performance_metrics().valid);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, PerformanceMetricsCaptureCompletedFullUpdateWhenPerfTagIsDebug) {
+  enable_perf_logging();
+
+  display_.update();
+  run_loop_until_done();
+
+  const auto &metrics = last_performance_metrics();
+  EXPECT_TRUE(metrics.valid);
+  EXPECT_EQ(metrics.type, DisplayOperationType::UPDATE);
+  EXPECT_EQ(metrics.result, DisplayOperationResult::COMPLETED);
+  EXPECT_TRUE(metrics.use_full_frame);
+  EXPECT_GT(metrics.total_us, 0);
+  EXPECT_GT(performance_bucket_us(DisplayPerformanceBucket::TRANSFER_LEFT), 0);
+  EXPECT_GT(performance_bucket_us(DisplayPerformanceBucket::TRANSFER_RIGHT), 0);
+  EXPECT_GT(performance_bucket_us(DisplayPerformanceBucket::WAIT_REFRESH), 0);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, PerformanceMetricsEnableLiveTrackingWhenPerfTagIsVerbose) {
+  enable_live_perf_logging();
+
+  display_.update();
+  EXPECT_TRUE(is_live_perf_tracking_active());
+
+  run_loop_until_done();
+
+  EXPECT_TRUE(last_performance_metrics().valid);
+  EXPECT_FALSE(is_live_perf_tracking_active());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, PerformanceMetricsCaptureSkippedPartialUpdateWithNoChanges) {
+  enable_perf_logging();
+  set_refresh_mode(RefreshMode::PARTIAL);
+
+  display_.update();
+  run_loop_until_done();
+
+  const auto &metrics = last_performance_metrics();
+  EXPECT_TRUE(metrics.valid);
+  EXPECT_EQ(metrics.type, DisplayOperationType::UPDATE);
+  EXPECT_EQ(metrics.result, DisplayOperationResult::SKIPPED);
   EXPECT_FALSE(display_.is_processing());
 }
 
@@ -363,6 +445,39 @@ TEST_F(EpaperSpectra6133ComponentTest, ScheduleDuringRefreshStageQueuesPendingOp
   EXPECT_EQ(pending_type(), DisplayOperationType::REFRESH_REGION);
   // is_processing() must still be true (pending operation counts as processing).
   EXPECT_TRUE(display_.is_processing());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, PerformanceMetricsCaptureAbortedAndPendingOperationsSeparately) {
+  enable_perf_logging();
+  display_.refresh();
+
+  set_display_busy(true);
+  for (int i = 0; i < 2000 && !is_in_hw_refresh_stage(); i++) {
+    g_mock_timer_us += 1000000LL;
+    display_.loop();
+  }
+  ASSERT_TRUE(is_in_hw_refresh_stage());
+
+  display_.refresh_region(0, 0, 100, 200);
+  EXPECT_TRUE(operation_cancelled());
+
+  set_display_busy(false);
+  g_mock_timer_us += 1000000LL;
+  display_.loop();
+
+  EXPECT_TRUE(last_performance_metrics().valid);
+  EXPECT_EQ(last_performance_metrics().type, DisplayOperationType::REFRESH);
+  EXPECT_EQ(last_performance_metrics().result, DisplayOperationResult::ABORTED);
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH_REGION);
+
+  run_loop_until_done();
+
+  EXPECT_TRUE(last_performance_metrics().valid);
+  EXPECT_EQ(last_performance_metrics().type, DisplayOperationType::REFRESH_REGION);
+  EXPECT_EQ(last_performance_metrics().result, DisplayOperationResult::COMPLETED);
+  EXPECT_FALSE(last_performance_metrics().use_full_frame);
+  EXPECT_EQ(last_performance_metrics().region_width, 100);
+  EXPECT_EQ(last_performance_metrics().region_height, 200);
 }
 
 // ---------------------------------------------------------------------------

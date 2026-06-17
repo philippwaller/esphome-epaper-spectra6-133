@@ -10,7 +10,6 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esphome/core/application.h"
 
 namespace esphome {
 namespace epaper_spectra6_133 {
@@ -107,8 +106,8 @@ bool Transport::init_spi() {
 /**
  * @brief Waits until the active-low BUSY line returns to its idle high level.
  *
- * The loop feeds the watchdog periodically so long panel operations do
- * not trigger ESPHome safety resets.
+ * The loop yields through PanelRuntimeHooks so top-level integrations can feed
+ * their watchdogs without adding framework dependencies to this layer.
  */
 bool Transport::wait_busy_high(uint32_t timeout_ms) {
   const int initial_level = this->busy_level();
@@ -124,8 +123,7 @@ bool Transport::wait_busy_high(uint32_t timeout_ms) {
       ESP_LOGE(TRANSPORT_TAG, "Timeout waiting for BUSY idle-high, last level=%d", this->busy_level());
       return false;
     }
-    App.feed_wdt();
-    vTaskDelay(pdMS_TO_TICKS(1));
+    this->delay_ms(1);
   }
 
   return true;
@@ -151,8 +149,14 @@ void Transport::set_cs(uint8_t index, uint32_t level) { gpio_set_level(this->cs_
 /** @brief Drives the external panel load-switch control pin. */
 void Transport::set_load_switch(uint32_t level) { gpio_set_level(this->power_pin_, level); }
 
-/** @brief Delays execution using the FreeRTOS scheduler. */
-void Transport::delay_ms(uint32_t ms) { vTaskDelay(pdMS_TO_TICKS(ms)); }
+/** @brief Delays execution using the configured runtime hook. */
+void Transport::delay_ms(uint32_t ms) {
+  if (this->runtime_hooks_ != nullptr) {
+    this->runtime_hooks_->yield_for_milliseconds(ms);
+    return;
+  }
+  vTaskDelay(pdMS_TO_TICKS(ms));
+}
 
 /** @brief Returns the raw logic level sampled from the BUSY pin. */
 int Transport::busy_level() const { return gpio_get_level(this->busy_pin_); }

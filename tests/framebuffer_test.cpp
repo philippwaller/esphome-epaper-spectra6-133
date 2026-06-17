@@ -17,18 +17,18 @@ uint8_t read_pixel_code(const std::vector<uint8_t> &buffer, int x, int y) {
 }
 
 TEST(ColorToCodeTest, MapsCanonicalPanelColors) {
-  EXPECT_EQ(color_to_code(Color(0, 0, 0)), COLOR_BLACK);
-  EXPECT_EQ(color_to_code(Color(255, 255, 255)), COLOR_WHITE);
-  EXPECT_EQ(color_to_code(Color(255, 255, 0)), COLOR_YELLOW);
-  EXPECT_EQ(color_to_code(Color(255, 0, 0)), COLOR_RED);
-  EXPECT_EQ(color_to_code(Color(0, 0, 255)), COLOR_BLUE);
-  EXPECT_EQ(color_to_code(Color(0, 255, 0)), COLOR_GREEN);
+  EXPECT_EQ(color_to_code(0, 0, 0), COLOR_BLACK);
+  EXPECT_EQ(color_to_code(255, 255, 255), COLOR_WHITE);
+  EXPECT_EQ(color_to_code(255, 255, 0), COLOR_YELLOW);
+  EXPECT_EQ(color_to_code(255, 0, 0), COLOR_RED);
+  EXPECT_EQ(color_to_code(0, 0, 255), COLOR_BLUE);
+  EXPECT_EQ(color_to_code(0, 255, 0), COLOR_GREEN);
 }
 
 TEST(ColorToCodeTest, MapsEdgeCaseColorsToClosestPaletteMatch) {
-  EXPECT_EQ(color_to_code(Color(125, 158, 131)), COLOR_WHITE);
-  EXPECT_EQ(color_to_code(Color(125, 165, 128)), COLOR_GREEN);
-  EXPECT_EQ(color_to_code(Color(180, 10, 240)), COLOR_BLUE);
+  EXPECT_EQ(color_to_code(125, 158, 131), COLOR_WHITE);
+  EXPECT_EQ(color_to_code(125, 165, 128), COLOR_GREEN);
+  EXPECT_EQ(color_to_code(180, 10, 240), COLOR_BLUE);
 }
 
 TEST(WritePixelToBufferTest, WritesEvenAndOddPixelsIntoSeparateNibbles) {

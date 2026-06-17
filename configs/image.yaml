@@ -21,6 +21,18 @@ esphome:
     # Render after all components have initialised (priority -100 = last).
     priority: -100
     then:
+      - delay: 20s
+      - logger.log:
+          level: INFO
+          tag: epaper_spectra6_133.perf
+          format: "perf tag INFO probe"
+      - logger.set_level:
+          tag: epaper_spectra6_133.perf
+          level: VERBOSE
+      - logger.log:
+          level: VERBOSE
+          tag: epaper_spectra6_133.perf
+          format: "perf tag VERBOSE probe"
       - component.update: epd
 
 api:
@@ -56,6 +68,14 @@ external_components:
       # type: git
       # url: https://github.com/philippwaller/esphome-epaper-spectra6-133
       # ref: v0.3.0  # x-release-please-version
+
+logger:
+  level: VERBOSE
+  initial_level: INFO
+  logs:
+    epaper_spectra6_133: DEBUG
+    epaper_spectra6_133.operation: DEBUG
+    epaper_spectra6_133.perf: VERBOSE
 
 image:
   - file: images/molly-porter-K7oqWgDJQ6E-unsplash-default-atkinson.png

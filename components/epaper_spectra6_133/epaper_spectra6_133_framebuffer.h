@@ -8,15 +8,13 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "esphome/core/color.h"
-
 #include "epaper_spectra6_133_constants.h"
 
 namespace esphome {
 namespace epaper_spectra6_133 {
 
 /**
- * @brief Maps an ESPHome RGB color to the closest 4-bit panel palette entry.
+ * @brief Maps an RGB colour to the closest 4-bit panel palette entry.
  *
  * The mapping is heuristic because the physical panel only supports six
  * fixed colours rather than arbitrary RGB output. This function is on the
@@ -28,12 +26,12 @@ namespace epaper_spectra6_133 {
  *       call inside full-frame draw loops. Re-run the benchmarks before moving
  *       this implementation back to the .cpp file.
  */
-inline uint8_t color_to_code(const Color &color) {
-  const uint32_t rgb = (static_cast<uint32_t>(color.red) << 16) | (static_cast<uint32_t>(color.green) << 8) |
-                       static_cast<uint32_t>(color.blue);
+inline uint8_t color_to_code(uint8_t red, uint8_t green, uint8_t blue) {
+  const uint32_t rgb =
+      (static_cast<uint32_t>(red) << 16) | (static_cast<uint32_t>(green) << 8) | static_cast<uint32_t>(blue);
 
-  // Exact Spectra 6 colours are common in ESPHome display lambdas and
-  // pre-quantized images, so avoid distance calculations for those pixels.
+  // Exact Spectra 6 colours are common in display lambdas and pre-quantized
+  // images, so avoid distance calculations for those pixels.
   switch (rgb) {
     case 0x00000000:
       return COLOR_BLACK;
@@ -51,16 +49,16 @@ inline uint8_t color_to_code(const Color &color) {
       break;
   }
 
-  const uint32_t red = color.red;
-  const uint32_t green = color.green;
-  const uint32_t blue = color.blue;
-  const uint32_t inv_red = 255U - red;
-  const uint32_t inv_green = 255U - green;
-  const uint32_t inv_blue = 255U - blue;
+  const uint32_t r32 = red;
+  const uint32_t g32 = green;
+  const uint32_t b32 = blue;
+  const uint32_t inv_red = 255U - r32;
+  const uint32_t inv_green = 255U - g32;
+  const uint32_t inv_blue = 255U - b32;
 
-  const uint32_t red_sq = red * red;
-  const uint32_t green_sq = green * green;
-  const uint32_t blue_sq = blue * blue;
+  const uint32_t red_sq = r32 * r32;
+  const uint32_t green_sq = g32 * g32;
+  const uint32_t blue_sq = b32 * b32;
   const uint32_t inv_red_sq = inv_red * inv_red;
   const uint32_t inv_green_sq = inv_green * inv_green;
   const uint32_t inv_blue_sq = inv_blue * inv_blue;
