@@ -4,6 +4,8 @@ esp32:
   flash_size: 16MB
   framework:
     type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP_TASK_WDT_TIMEOUT_S: "${task_wdt_timeout_s}"
 psram:
   mode: octal
   speed: 80MHz
@@ -15,6 +17,10 @@ logger:
   logs:
     epaper_spectra6_133: INFO
 substitutions:
+  # Task watchdog timeout in seconds (5–60). Increase to 60 when using PNG
+  # images with online_image — the pngle decoder blocks the loop task for
+  # longer than the default 5s on large images.
+  task_wdt_timeout_s: "5"
   epd_clk_pin: '9'
   epd_data0_pin: '41'
   epd_data1_pin: '40'
