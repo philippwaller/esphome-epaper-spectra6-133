@@ -2,5 +2,5 @@
 gcovr>=8.6,<9
 packaging>=26.2
 pre-commit>=4.6.0,<5
-pytest>=9.1.0
+pytest>=9.1.1
 PyYAML>=6.0.3
