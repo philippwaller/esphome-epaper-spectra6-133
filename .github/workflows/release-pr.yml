@@ -4,6 +4,20 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel
+        type: choice
+        required: true
+        default: stable
+        options:
+          - stable
+          - beta
+          - rc
+      release_as:
+        description: "Explicit version override such as 0.4.0-beta.1, 0.4.0-rc.1, or 0.4.0"
+        type: string
+        required: false
 
 permissions:
   contents: write
@@ -20,18 +34,69 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Resolve Token
-        id: resolve-token
-        run: |
-          if [ -z "${{ secrets.RELEASE_PLEASE_TOKEN }}" ]; then
-            echo "::warning title=Release token missing::Using GITHUB_TOKEN for this release. Follow-up workflows will not be triggered. Configure RELEASE_PLEASE_TOKEN with a PAT to enable them."
-            echo "token=${{ secrets.GITHUB_TOKEN }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "token=${{ secrets.RELEASE_PLEASE_TOKEN }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5
+      - name: Run Release Please
+        if: ${{ github.event_name == 'push' }}
+        uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c  # v4.3.0
         with:
-          token: ${{ steps.resolve-token.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        with:
+          persist-credentials: false
+
+      - name: Generate Release Please configuration
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        id: release-please-config
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          RELEASE_AS: ${{ inputs.release_as }}
+        run: |
+          runtime_config="${RUNNER_TEMP}/release-please-config.json"
+
+          jq 'walk(if type == "object" then del(.prerelease, .["prerelease-type"], .["release-as"]) else . end)' release-please-config.json > "${runtime_config}"
+
+          case "${CHANNEL}" in
+            beta)
+              jq '. + {"prerelease": true, "prerelease-type": "beta"}' "${runtime_config}" > "${runtime_config}.tmp"
+              mv "${runtime_config}.tmp" "${runtime_config}"
+              ;;
+            rc)
+              jq '. + {"prerelease": true, "prerelease-type": "rc"}' "${runtime_config}" > "${runtime_config}.tmp"
+              mv "${runtime_config}.tmp" "${runtime_config}"
+              ;;
+            stable)
+              ;;
+            *)
+              echo "::error title=Invalid release channel::${CHANNEL}"
+              exit 1
+              ;;
+          esac
+
+          if [ -n "${RELEASE_AS}" ]; then
+            jq --arg release_as "${RELEASE_AS}" '. + {"release-as": $release_as}' "${runtime_config}" > "${runtime_config}.tmp"
+            mv "${runtime_config}.tmp" "${runtime_config}"
+          fi
+
+          jq . "${runtime_config}"
+          echo "path=${runtime_config}" >> "$GITHUB_OUTPUT"
+
+      - name: Run Release Please for selected channel
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_PLEASE_CONFIG: ${{ steps.release-please-config.outputs.path }}
+        run: |
+          npx --yes release-please@16 github-release \
+            --token="${GITHUB_TOKEN}" \
+            --repo-url="${GITHUB_REPOSITORY}" \
+            --config-file="${RELEASE_PLEASE_CONFIG}" \
+            --manifest-file=".release-please-manifest.json"
+
+          npx --yes release-please@16 release-pr \
+            --token="${GITHUB_TOKEN}" \
+            --repo-url="${GITHUB_REPOSITORY}" \
+            --config-file="${RELEASE_PLEASE_CONFIG}" \
+            --manifest-file=".release-please-manifest.json"
