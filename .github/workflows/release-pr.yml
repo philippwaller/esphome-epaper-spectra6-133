@@ -36,14 +36,16 @@ jobs:
     steps:
       - name: Run Release Please
         if: ${{ github.event_name == 'push' }}
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c  # v4.3.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
         if: ${{ github.event_name == 'workflow_dispatch' }}
+        with:
+          persist-credentials: false
 
       - name: Generate Release Please configuration
         if: ${{ github.event_name == 'workflow_dispatch' }}
