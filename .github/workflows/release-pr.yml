@@ -53,6 +53,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHANNEL: ${{ inputs.channel }}
           RELEASE_AS: ${{ inputs.release_as }}
+          RELEASE_PLEASE_CLI_VERSION: 16.18.0
         run: |
           github_release_args=(
             "--token=${GITHUB_TOKEN}"
@@ -85,5 +86,5 @@ jobs:
             release_pr_args+=("--release-as=${RELEASE_AS}")
           fi
 
-          npx --yes release-please@16 github-release "${github_release_args[@]}"
-          npx --yes release-please@16 release-pr "${release_pr_args[@]}"
+          npx --yes "release-please@${RELEASE_PLEASE_CLI_VERSION}" github-release "${github_release_args[@]}"
+          npx --yes "release-please@${RELEASE_PLEASE_CLI_VERSION}" release-pr "${release_pr_args[@]}"
