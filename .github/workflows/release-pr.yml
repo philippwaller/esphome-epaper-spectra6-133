@@ -47,25 +47,31 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Generate Release Please configuration
+      - name: Run Release Please for selected channel
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        id: release-please-config
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHANNEL: ${{ inputs.channel }}
           RELEASE_AS: ${{ inputs.release_as }}
         run: |
-          runtime_config="${RUNNER_TEMP}/release-please-config.json"
+          github_release_args=(
+            "--token=${GITHUB_TOKEN}"
+            "--repo-url=${GITHUB_REPOSITORY}"
+            "--config-file=release-please-config.json"
+            "--manifest-file=.release-please-manifest.json"
+          )
 
-          jq 'walk(if type == "object" then del(.prerelease, .["prerelease-type"], .["release-as"]) else . end)' release-please-config.json > "${runtime_config}"
+          release_pr_args=(
+            "--token=${GITHUB_TOKEN}"
+            "--repo-url=${GITHUB_REPOSITORY}"
+            "--config-file=release-please-config.json"
+            "--manifest-file=.release-please-manifest.json"
+          )
 
           case "${CHANNEL}" in
-            beta)
-              jq '. + {"prerelease": true, "prerelease-type": "beta"}' "${runtime_config}" > "${runtime_config}.tmp"
-              mv "${runtime_config}.tmp" "${runtime_config}"
-              ;;
-            rc)
-              jq '. + {"prerelease": true, "prerelease-type": "rc"}' "${runtime_config}" > "${runtime_config}.tmp"
-              mv "${runtime_config}.tmp" "${runtime_config}"
+            beta|rc)
+              github_release_args+=("--prerelease")
+              release_pr_args+=("--snapshot" "--prerelease-type=${CHANNEL}")
               ;;
             stable)
               ;;
@@ -76,27 +82,8 @@ jobs:
           esac
 
           if [ -n "${RELEASE_AS}" ]; then
-            jq --arg release_as "${RELEASE_AS}" '. + {"release-as": $release_as}' "${runtime_config}" > "${runtime_config}.tmp"
-            mv "${runtime_config}.tmp" "${runtime_config}"
+            release_pr_args+=("--release-as=${RELEASE_AS}")
           fi
 
-          jq . "${runtime_config}"
-          echo "path=${runtime_config}" >> "$GITHUB_OUTPUT"
-
-      - name: Run Release Please for selected channel
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_PLEASE_CONFIG: ${{ steps.release-please-config.outputs.path }}
-        run: |
-          npx --yes release-please@16 github-release \
-            --token="${GITHUB_TOKEN}" \
-            --repo-url="${GITHUB_REPOSITORY}" \
-            --config-file="${RELEASE_PLEASE_CONFIG}" \
-            --manifest-file=".release-please-manifest.json"
-
-          npx --yes release-please@16 release-pr \
-            --token="${GITHUB_TOKEN}" \
-            --repo-url="${GITHUB_REPOSITORY}" \
-            --config-file="${RELEASE_PLEASE_CONFIG}" \
-            --manifest-file=".release-please-manifest.json"
+          npx --yes release-please@16 github-release "${github_release_args[@]}"
+          npx --yes release-please@16 release-pr "${release_pr_args[@]}"
