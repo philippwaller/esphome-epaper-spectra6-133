@@ -34,11 +34,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Resolve Release Token
+        id: release_token
+        run: |
+          if [ -z "${{ secrets.RELEASE_PLEASE_TOKEN }}" ]; then
+            echo "::warning title=Release token missing::Using GITHUB_TOKEN for this release. Follow-up workflows will not be triggered. Configure RELEASE_PLEASE_TOKEN with a PAT to enable them."
+            echo "token=${{ secrets.GITHUB_TOKEN }}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "token=${{ secrets.RELEASE_PLEASE_TOKEN }}" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Run Release Please
         if: ${{ github.event_name == 'push' }}
         uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c  # v4.3.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.release_token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
@@ -47,23 +57,69 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Resolve Release Please CLI version
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        id: release_please_cli
+        run: |
+          action_ref="$(python3 - <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          workflow = pathlib.Path('.github/workflows/release-pr.yml').read_text()
+          match = re.search(
+              r"if:\s+\$\{\{\s*github\.event_name\s*==\s*'push'\s*\}\}\s*\n"
+              r"\s*uses:\s+googleapis/release-please-action@([^\s#]+)",
+              workflow,
+          )
+
+          if not match:
+              sys.exit(1)
+
+          print(match.group(1))
+          PY
+          )"
+
+          if [ -z "${action_ref}" ]; then
+            echo "::error title=Missing release-please action ref::Could not determine the pinned googleapis/release-please-action ref from .github/workflows/release-pr.yml"
+            exit 1
+          fi
+
+          if ! package_lock_json="$(curl --fail --silent --show-error "https://raw.githubusercontent.com/googleapis/release-please-action/${action_ref}/package-lock.json")"; then
+            echo "::error title=Failed to fetch release-please lockfile::Could not fetch package-lock.json for googleapis/release-please-action ref ${action_ref}"
+            exit 1
+          fi
+
+          if ! cli_version="$(printf '%s' "${package_lock_json}" | python3 -c 'import json, sys; print(json.load(sys.stdin)["packages"]["node_modules/release-please"]["version"])')"; then
+            echo "::error title=Failed to parse release-please lockfile::Could not parse the bundled release-please version from package-lock.json for action ref ${action_ref}"
+            exit 1
+          fi
+
+          if [ -z "${cli_version}" ]; then
+            echo "::error title=Missing release-please CLI version::Could not determine the bundled release-please version for action ref ${action_ref}"
+            exit 1
+          fi
+
+          echo "Resolved release-please ${cli_version} from action ref ${action_ref}"
+          echo "version=${cli_version}" >> "${GITHUB_OUTPUT}"
+
       - name: Run Release Please for selected channel
         if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_PLEASE_TOKEN: ${{ steps.release_token.outputs.token }}
           CHANNEL: ${{ inputs.channel }}
           RELEASE_AS: ${{ inputs.release_as }}
-          RELEASE_PLEASE_CLI_VERSION: 16.18.0
+          RELEASE_PLEASE_CLI_VERSION: ${{ steps.release_please_cli.outputs.version }}
         run: |
           github_release_args=(
-            "--token=${GITHUB_TOKEN}"
+            "--token=${RELEASE_PLEASE_TOKEN}"
             "--repo-url=${GITHUB_REPOSITORY}"
             "--config-file=release-please-config.json"
             "--manifest-file=.release-please-manifest.json"
           )
 
           release_pr_args=(
-            "--token=${GITHUB_TOKEN}"
+            "--token=${RELEASE_PLEASE_TOKEN}"
             "--repo-url=${GITHUB_REPOSITORY}"
             "--config-file=release-please-config.json"
             "--manifest-file=.release-please-manifest.json"
