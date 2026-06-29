@@ -20,6 +20,12 @@ substitutions:
   device_name: spectra6-puppet
   friendly_name: Spectra 6 Puppet
 
+  # --- Task watchdog timeout ---
+  # Set to 60s to allow PNG decoding to complete without triggering a reset.
+  # The pngle decoder processes the full image in one loop tick and can exceed
+  # the default 5s on a 1200x1600 image. Use "5" if serving BMP images.
+  task_wdt_timeout_s: "60"
+
   # --- Puppet image URL ---
   # Replace with the URL your Puppet instance serves. The viewport should match
   # the display resolution (1200x1600). Use format=bmp for best compatibility.
