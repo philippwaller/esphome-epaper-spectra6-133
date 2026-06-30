@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.4.0](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.3.0...v0.4.0) (2026-06-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **display:** align public API with refresh terminology ([#58](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/58))
+
+### ♻️ Refactoring
+
+* **display:** Align public API with refresh terminology ([#58](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/58)) ([25451fc](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/25451fc8b6451c90c285ce2f29dd3ba1d1df7fab))
+
+
+### 🔧 Maintenance
+
+* **deps:** Update actions/cache action to v6 ([#72](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/72)) ([c422cc9](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/c422cc980789a7c55bd5c1556c4a5101ff99085a))
+* **deps:** Update actions/cache digest to caa2961 ([#67](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/67)) ([a6cedfb](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/a6cedfbff014be8babe157bdf65c38757c93cf18))
+* **deps:** Update actions/checkout action to v7 ([#73](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/73)) ([25efc8b](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/25efc8bf837b4211193fb6636371595889a3f5f9))
+* **deps:** Update actions/setup-python digest to ece7cb0 ([#68](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/68)) ([6bc0f34](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/6bc0f34e38dbcc1754380b247461311e44a5b733))
+* **deps:** Update codspeedhq/action digest to 63f3e98 ([#63](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/63)) ([b82ddec](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/b82ddec4d8cab0ab57a93695e3a0453f9a18b477))
+* **deps:** Update codspeedhq/action digest to a4a36bb ([#69](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/69)) ([e796c98](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/e796c985916a0c6780d2c38b38096c8bacb31d42))
+* **deps:** Update codspeedhq/action digest to c145068 ([#56](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/56)) ([0c15324](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/0c153242b54ea2c7be64ec36346055e5f1bd4ccc))
+* **deps:** Update dependency pytest to &gt;=9.1.0 ([#60](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/60)) ([f657871](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/f65787159f11f99ac552fff048331940007d8a5d))
+* **deps:** Update dependency pytest to &gt;=9.1.1 ([#64](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/64)) ([c5205e0](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/c5205e0d822021a51f6044d42415268e5131ab5b))
+* **deps:** Update googleapis/release-please-action action to v5 ([#74](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/74)) ([ce6ee06](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/ce6ee066d3b10be30001999897e9853efd2d0505))
+* **deps:** Update pre-commit hook astral-sh/ruff-pre-commit to v0.15.17 ([#59](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/59)) ([e505949](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/e5059496bc6d913c9cb49919d56ff218b7f749be))
+* **deps:** Update pre-commit hook astral-sh/ruff-pre-commit to v0.15.20 ([#70](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/70)) ([b184ac7](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/b184ac7421311a511aeebd5907353ac7c4c4e57f))
+
 ## [0.3.0](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.2.0...v0.3.0) (2026-06-09)
 
 
