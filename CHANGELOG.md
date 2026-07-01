@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.1](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.4.0...v0.4.1) (2026-07-01)
+
+
+### 🚀 Features
+
+* Add board definition for Good Display ESP32-133C02 revision 2 ([#75](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/75)) ([1626c76](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/1626c76dd78e70873e0477fee1c5563d5bef6424))
+
+
+### 🔧 Maintenance
+
+* **deps:** Update pre-commit hook davidanson/markdownlint-cli2 to v0.23.0 ([#76](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/76)) ([b601838](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/b601838715da273971c813f4fce7a0e04ec2d148))
+
 ## [0.4.0](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.3.0...v0.4.0) (2026-06-30)
 
 
