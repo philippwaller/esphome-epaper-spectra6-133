@@ -1,0 +1,63 @@
+---
+esp32:
+  board: esp32-s3-devkitc-1
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+# The ESP32-S3-WROOM-1-N16R8 module has 8 MB of octal PSRAM. The display
+# framebuffer requires PSRAM, so fail startup if it is not found.
+psram:
+  mode: octal
+  speed: 80MHz
+  ignore_not_found: false
+
+# The programming connector uses UART0. Native USB is separate and is not
+# enabled automatically by this package.
+logger:
+  hardware_uart: UART0
+  baud_rate: 115200
+  level: INFO
+  logs:
+    epaper_spectra6_133: INFO
+
+substitutions:
+  # Pins used by the display component.
+  epd_clk_pin: '9'
+  epd_data0_pin: '41'
+  epd_data1_pin: '40'
+  epd_cs0_pin: '18'
+  epd_cs1_pin: '17'
+  epd_busy_pin: '7'
+  epd_reset_pin: '6'
+  epd_power_pin: '45'
+
+  # D/C distinguishes commands from data in classic SPI. The current standard-
+  # SPI transport does not use it; GPIO2 is connected and reserved, so do not
+  # use it for other hardware.
+  epd_dc_pin: '2'
+
+  # The vendor sample names GPIO39 and GPIO38 as additional Quad-SPI data lines
+  # but does not enable them. They remain reserved; do not use them for other
+  # hardware.
+  epd_data2_pin: '39'
+  epd_data3_pin: '38'
+
+  # The onboard SD card uses a separate SPI bus. This package provides only the
+  # pin mapping; it does not configure or mount the card.
+  sd_card_cs_pin: '15'
+  sd_card_mosi_pin: '3'
+  sd_card_miso_pin: '5'
+  sd_card_clk_pin: '8'
+
+  # GPIO19 and GPIO20 are derived from the ESP32-S3 fixed USB assignment and the
+  # board's separate USB communication connector. They are reserved here; this
+  # package does not enable native USB.
+  native_usb_d_minus_pin: '19'
+  native_usb_d_plus_pin: '20'
+
+  # GPIO43 and GPIO44 are derived from the ESP32-S3 default UART0 pin assignment
+  # and the vendor's UART0 console. They remain reserved for programming and
+  # logs; carrier-board routing is unverified.
+  program_uart_tx_pin: '43'
+  program_uart_rx_pin: '44'

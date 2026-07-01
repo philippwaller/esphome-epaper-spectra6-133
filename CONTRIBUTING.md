@@ -182,7 +182,7 @@ configs/                            Device configurations & secrets
 └── secrets.yaml                    (git-ignored)
 
 packages/boards/                    Board-specific YAML packages
-└── goo_display/
+└── good_display/
     └── esp32_133c02.yaml           ESP32-133C02 board defaults & pin mapping
 
 scripts/
