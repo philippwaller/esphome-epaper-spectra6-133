@@ -1,0 +1,10 @@
+---
+packages:
+  base: !include esp32_133c02.yaml
+
+substitutions:
+  # GPIO pins connected to the three physical buttons available on Ref2.
+  # A pressed button reads HIGH. Add GPIO binary sensors to use them.
+  onboard_button_sw2_pin: '12'
+  onboard_button_sw3_pin: '13'
+  onboard_button_sw4_pin: '14'

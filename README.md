@@ -49,22 +49,19 @@ An ESPHome display component for large-format 13.3″ Spectra 6 e-paper panels. 
 
 | Vendor | Model | Status |
 |---|---|---|
-| Goo Display | GDEP133C02 | ✅ Tested |
+| Good Display | GDEP133C02 | ✅ Tested |
 | Waveshare | 13.3inch e-Paper (F) | 🔄 Not yet confirmed |
 | Seeed Studio | 13.3″ ePaper Display | 🔄 Not yet confirmed |
 
 Panels marked 🔄 are expected to work, but have not been confirmed with hardware. If you own one of these panels, please [open an issue](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues) with your test results.
 
-<details>
-<summary><strong>Preconfigured Boards</strong></summary>
+### Preconfigured Boards
 
-| Board | MCU | PSRAM | Notes |
+| Vendor | Board | MCU | Notes |
 |---|---|---|---|
-| [Goo Display ESP32-133C02](packages/boards/goo_display/esp32_133c02.yaml) | ESP32-S3 | 16 MB | Revision 1.0, 2.0 |
+| Good Display | [ESP32-133C02](docs/boards/good_display_esp32_133c02.md) | ESP32-S3 | Two revisions: [Ref1](packages/boards/good_display/esp32_133c02.yaml) (base) and [Ref2](packages/boards/good_display/esp32_133c02_ref2.yaml) (adds onboard buttons) |
 
-See [Using Board Packages](#-using-board-packages) for import instructions and copy-paste examples.
-
-</details>
+See [Using Board Packages](#-using-board-packages) for import instructions.
 
 ---
 
@@ -208,13 +205,7 @@ After flashing, the display should render the `HELLO MAKER` screen once.
 
 ## 📦 Using Board Packages
 
-Board packages are optional shortcuts for known ESP32/display boards. You can always configure the board, PSRAM, logger, and display pins manually, as shown in the Quick Start example. If your board is listed here, the package gives you those hardware defaults and pin variables without copying them into every device YAML.
-
-Use a board package when you want ESPHome to import the board setup for you. The package defines board-specific ESPHome options and named substitutions such as `${epd_cs0_pin}` and `${epd_busy_pin}`. You can use those names directly in your `display:` block, or override individual substitutions in your own YAML when your wiring differs.
-
-You still need [`external_components`](https://esphome.io/components/external_components/) to download the custom `epaper_spectra6_133` display component. The [`packages`](https://esphome.io/components/packages/) entry only adds the board configuration. Your own YAML still contains the device-specific parts such as `esphome:`, WiFi, API/OTA, fonts, images, and the display lambda.
-
-Add the custom component as shown in the [Quick Start](#-quick-start) section. Then add the matching board package from the table below:
+A board package is an optional shortcut that supplies board-specific ESPHome options and named pin substitutions such as `${epd_cs0_pin}` and `${epd_busy_pin}`. You can use those names directly in your `display:` block instead of copying pin numbers into every device YAML. You still need [`external_components`](https://esphome.io/components/external_components/) to download the display component; the [`packages`](https://esphome.io/components/packages/) entry only adds the board configuration.
 
 <!-- x-release-please-start-version -->
 ```yaml
@@ -223,42 +214,14 @@ packages:
 ```
 <!-- x-release-please-end -->
 
-For example, for the Goo Display ESP32-133C02:
+### Good Display ESP32-133C02
 
-<!-- x-release-please-start-version -->
-```yaml
-packages:
-  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/goo_display/esp32_133c02.yaml@v0.4.0
-```
-<!-- x-release-please-end -->
+Both revisions share the same display support. Ref2 extends Ref1 with three onboard buttons. See the [ESP32-133C02 board guide](docs/boards/good_display_esp32_133c02.md) for revision identification, pinout, and hardware details.
 
-With the package in place, the display block can use the predefined pin substitutions:
-
-```yaml
-display:
-  - platform: epaper_spectra6_133
-    id: epaper_display
-    update_interval: never
-    cs0_pin: ${epd_cs0_pin}
-    cs1_pin: ${epd_cs1_pin}
-    clk_pin: ${epd_clk_pin}
-    data0_pin: ${epd_data0_pin}
-    data1_pin: ${epd_data1_pin}
-    busy_pin: ${epd_busy_pin}
-    reset_pin: ${epd_reset_pin}
-    power_pin: ${epd_power_pin}
-    lambda: |-
-      it.fill(Color(255, 255, 255));
-      it.print(40, 80, id(font_title), Color(0, 0, 0), "Hello Spectra 6");
-```
-
-### Available packages
-
-| Vendor | Board | Notes | Package path |
-| --- | --- | --- | --- |
-| Goo Display | ESP32-133C02 | Tested on revision 1.0; revision 2.0 is expected to work | [`goo_display/esp32_133c02.yaml`](packages/boards/goo_display/esp32_133c02.yaml) |
-
-Use the `Package path` value in the `github://.../packages/boards/<package-path>@version` import above. Open the linked package file if you want to inspect the exact ESP32, PSRAM, logger, and pin settings it imports.
+| Package | Use this when | Package path |
+| --- | --- | --- |
+| Ref1 | Default choice for both board revisions | [`good_display/esp32_133c02.yaml`](packages/boards/good_display/esp32_133c02.yaml) |
+| Ref2 | Only when using onboard buttons SW2–SW4 | [`good_display/esp32_133c02_ref2.yaml`](packages/boards/good_display/esp32_133c02_ref2.yaml) |
 
 > [!TIP]
 > Have a working setup for another board? Turn it into a reusable package and help the next user get started faster. Open a pull request with your board package, or share your pinout, PSRAM settings, and board notes in an issue so it can be added here.
@@ -278,7 +241,7 @@ substitutions:
   epd_power_pin: "45"
 
 packages:
-  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/goo_display/esp32_133c02.yaml@v0.4.0
+  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/good_display/esp32_133c02.yaml@v0.4.0
 ```
 <!-- x-release-please-end -->
 
@@ -293,7 +256,7 @@ The example configs in this repository use local includes because they are built
 
 ```yaml
 packages:
-  board: !include ../packages/boards/goo_display/esp32_133c02.yaml
+  board: !include ../packages/boards/good_display/esp32_133c02.yaml
 ```
 
 Use this local form only when the package file is present next to your ESPHome YAML. For a Home Assistant ESPHome add-on or a standalone ESPHome config that should fetch files from GitHub, use the `github://...@version` form above.
