@@ -91,7 +91,7 @@ external_components:
       # In your own ESPHome config, use the released GitHub version instead:
       # type: git
       # url: https://github.com/philippwaller/esphome-epaper-spectra6-133
-      # ref: v0.4.0  # x-release-please-version
+      # ref: v0.4.1  # x-release-please-version
 
 globals:
   - id: startup_first_render_done
