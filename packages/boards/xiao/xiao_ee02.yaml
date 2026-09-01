@@ -12,7 +12,6 @@ psram:
   speed: 80MHz
   ignore_not_found: false
 
-
 # UART0 is used for other purposes
 logger:
   level: INFO
@@ -45,4 +44,4 @@ substitutions:
   # package does not enable native USB.
   native_usb_d_minus_pin: '19'
   native_usb_d_plus_pin: '20'
-
+  
