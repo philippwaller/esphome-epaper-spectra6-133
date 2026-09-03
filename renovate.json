@@ -37,6 +37,65 @@
         "requirements-dev.txt"
       ],
       "rangeStrategy": "bump"
+    },
+    {
+      "description": "Group non-breaking GitHub Actions updates",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "matchJsonata": [
+        "isBreaking != true"
+      ],
+      "groupName": "GitHub Actions (non-major)",
+      "groupSlug": "github-actions"
+    },
+    {
+      "description": "Group non-breaking pre-commit hook updates",
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "matchJsonata": [
+        "isBreaking != true"
+      ],
+      "groupName": "pre-commit hooks (non-major)",
+      "groupSlug": "pre-commit-hooks"
+    },
+    {
+      "description": "Group non-breaking Python development dependency updates",
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchFileNames": [
+        "requirements-dev.txt"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "matchJsonata": [
+        "isBreaking != true"
+      ],
+      "groupName": "Python development dependencies (non-major)",
+      "groupSlug": "python-development"
+    },
+    {
+      "description": "Keep release automation updates isolated",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "googleapis/release-please-action"
+      ],
+      "groupName": null
     }
   ]
 }
