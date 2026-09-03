@@ -635,7 +635,8 @@ void EpaperSpectra6133::abort_display_operation_() {
 }
 
 /**
- * @brief Finalises a completed display operation: cleanup, update previous frame, reset tracking, and clear.
+ * @brief Finalises a completed display operation: cleanup, update previous frame (unless SLEEP), reset tracking
+ * (unless SLEEP), and clear.
  *
  * For region operations, only the refreshed rectangle is synced into the previous-frame buffer
  * (compare mode) and dirty tracking is cleared only when the refreshed rect fully contains the
