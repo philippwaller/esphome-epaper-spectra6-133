@@ -926,6 +926,71 @@ TEST_F(EpaperSpectra6133ComponentTest, CompareModeFindsDirtyPixelsOutsideRefresh
   EXPECT_LT(remaining.y, 650);
 }
 
+// ---------------------------------------------------------------------------
+// 26. sleep() transfers nothing to the panel, so it must not clear pending
+//     dirty tracking (track mode).
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, SleepPreservesTrackedRegion) {
+  set_change_detection_mode(ChangeDetectionMode::TRACK);
+
+  draw_pixel(100, 200);
+  ASSERT_FALSE(detect_changed_region().empty());
+
+  display_.sleep();
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  // The pixel was never sent to the panel — it must still be pending.
+  EXPECT_FALSE(detect_changed_region().empty());
+}
+
+// ---------------------------------------------------------------------------
+// 27. sleep() must not sync the framebuffer into previous_frame_buffer_ —
+//     the panel never received those pixels (compare mode).
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, SleepPreservesPreviousFrameBaseline) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+  // Keep the display awake after the refresh so sleep() below actually
+  // schedules a SLEEP operation instead of being an already-sleeping no-op.
+  display_.set_auto_sleep(false);
+
+  // Establish a real baseline via a full refresh.
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  std::memset(buf, 0x11, FULL_FRAME_SIZE);
+  display_.refresh();
+  run_loop_until_done();
+  ASSERT_TRUE(has_previous_frame_buffer());
+
+  // Draw changes the panel never receives, then sleep.
+  for (int y = 300; y < 350; y++) {
+    std::memset(buf + static_cast<size_t>(y) * ROW_BYTES, 0xAA, ROW_BYTES);
+  }
+  display_.sleep();
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  // Baseline must still hold the last displayed content, keeping the
+  // undisplayed changes detectable.
+  EXPECT_TRUE(previous_frame_is_byte(static_cast<size_t>(300) * ROW_BYTES, 50 * ROW_BYTES, 0x11));
+  EXPECT_FALSE(detect_changed_region().empty());
+}
+
+// ---------------------------------------------------------------------------
+// 28. A bare sleep() before any refresh must not allocate and seed the
+//     previous-frame baseline from content the panel never displayed.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, SleepDoesNotEstablishPreviousFrameBaseline) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+  ASSERT_FALSE(has_previous_frame_buffer());
+
+  display_.sleep();
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  EXPECT_FALSE(has_previous_frame_buffer());
+}
+
 // All tests in this section call deprecated methods intentionally.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
