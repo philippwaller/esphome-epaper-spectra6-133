@@ -182,8 +182,11 @@ configs/                            Device configurations & secrets
 └── secrets.yaml                    (git-ignored)
 
 packages/boards/                    Board-specific YAML packages
-└── good_display/
-    └── esp32_133c02.yaml           ESP32-133C02 board defaults & pin mapping
+├── good_display/
+│   ├── esp32_133c02.yaml           ESP32-133C02 board defaults & pin mapping
+│   └── esp32_133c02_ref2.yaml      Ref2 revision, adds the onboard buttons
+└── seeed_studio/
+    └── xiao_ee02.yaml              XIAO ePaper Display Board EE02 pin mapping
 
 scripts/
 ├── setup.sh                        Prepare local dev environment, secrets, and hooks

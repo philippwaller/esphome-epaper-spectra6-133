@@ -60,6 +60,7 @@ Panels marked 🔄 are expected to work, but have not been confirmed with hardwa
 | Vendor | Board | MCU | Notes |
 |---|---|---|---|
 | Good Display | [ESP32-133C02](docs/boards/good_display_esp32_133c02.md) | ESP32-S3 | Two revisions: [Ref1](packages/boards/good_display/esp32_133c02.yaml) (base) and [Ref2](packages/boards/good_display/esp32_133c02_ref2.yaml) (adds onboard buttons) |
+| Seeed Studio | [XIAO ePaper Display Board EE02](docs/boards/seeed_studio_xiao_ee02.md) | ESP32-S3 | [Package](packages/boards/seeed_studio/xiao_ee02.yaml) for the board with a soldered XIAO ESP32-S3 Plus, battery connector, and three user buttons |
 
 See [Using Board Packages](#-using-board-packages) for import instructions.
 
@@ -222,6 +223,14 @@ Both revisions share the same display support. Ref2 extends Ref1 with three onbo
 | --- | --- | --- |
 | Ref1 | Default choice for both board revisions | [`good_display/esp32_133c02.yaml`](packages/boards/good_display/esp32_133c02.yaml) |
 | Ref2 | Only when using onboard buttons SW2–SW4 | [`good_display/esp32_133c02_ref2.yaml`](packages/boards/good_display/esp32_133c02_ref2.yaml) |
+
+### Seeed Studio XIAO ePaper Display Board EE02
+
+The package covers the display pins, PSRAM, and the user buttons and battery sense pins. Because the USB-C port is wired to native USB, the package logs over `USB_SERIAL_JTAG` instead of UART0. See the [EE02 board guide](docs/boards/seeed_studio_xiao_ee02.md) for the full pinout and hardware notes.
+
+| Package | Use this when | Package path |
+| --- | --- | --- |
+| EE02 | Driver board with a soldered XIAO ESP32-S3 Plus | [`seeed_studio/xiao_ee02.yaml`](packages/boards/seeed_studio/xiao_ee02.yaml) |
 
 > [!TIP]
 > Have a working setup for another board? Turn it into a reusable package and help the next user get started faster. Open a pull request with your board package, or share your pinout, PSRAM settings, and board notes in an issue so it can be added here.

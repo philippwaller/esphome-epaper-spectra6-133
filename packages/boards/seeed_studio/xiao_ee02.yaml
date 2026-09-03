@@ -1,0 +1,62 @@
+---
+esp32:
+  board: esp32-s3-devkitc-1
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+# The onboard XIAO ESP32-S3 Plus has 8 MB of octal PSRAM. The display
+# framebuffer requires PSRAM, so fail startup if it is not found.
+psram:
+  mode: octal
+  speed: 80MHz
+  ignore_not_found: false
+
+# The USB-C connector is wired to the native USB peripheral; there is no UART
+# bridge. UART0 is unavailable because GPIO43 and GPIO44 drive the panel power
+# switch and the left chip select, so logs go over USB Serial/JTAG.
+logger:
+  hardware_uart: USB_SERIAL_JTAG
+  level: INFO
+  logs:
+    epaper_spectra6_133: INFO
+
+substitutions:
+  # Pins used by the display component.
+  epd_clk_pin: '7'
+  epd_data0_pin: '9'
+  epd_data1_pin: '8'
+  epd_cs0_pin: '44'
+  epd_cs1_pin: '41'
+  epd_busy_pin: '4'
+  epd_reset_pin: '38'
+  epd_power_pin: '43'
+
+  # D/C distinguishes commands from data in classic SPI. The current standard-
+  # SPI transport does not use it; GPIO10 is connected and reserved, so do not
+  # use it for other hardware.
+  epd_dc_pin: '10'
+
+  # The FPC connector carries two more Quad-SPI data lines that the current
+  # transport does not enable. They remain reserved; do not use them for other
+  # hardware.
+  epd_data2_pin: '39'
+  epd_data3_pin: '42'
+
+  # GPIO pins connected to the three onboard user buttons. Each pin has a
+  # pull-up resistor, so a pressed button reads LOW. Add GPIO binary sensors
+  # with `inverted: true` to use them.
+  onboard_button_1_pin: '2'
+  onboard_button_2_pin: '3'
+  onboard_button_3_pin: '5'
+
+  # Battery voltage sense. GPIO6 enables the divider and must be driven high
+  # before GPIO1 is read; keep it low otherwise to avoid a constant drain.
+  battery_adc_pin: '1'
+  battery_adc_enable_pin: '6'
+
+  # GPIO19 and GPIO20 are the fixed ESP32-S3 native USB pins used by the
+  # board's USB-C connector. They are reserved here; this package does not
+  # configure native USB beyond the logger setting above.
+  native_usb_d_minus_pin: '19'
+  native_usb_d_plus_pin: '20'
