@@ -339,8 +339,12 @@ bool EpaperSpectra6133::wake() {
 // ---------------------------------------------------------------------------
 
 UpdateRegion EpaperSpectra6133::detect_changed_region() const {
-  if (this->change_detection_mode_ == ChangeDetectionMode::COMPARE && this->previous_frame_buffer_ != nullptr &&
-      this->buffer_ != nullptr) {
+  if (this->change_detection_mode_ == ChangeDetectionMode::COMPARE && this->buffer_ != nullptr) {
+    if (this->previous_frame_buffer_ == nullptr) {
+      // Panel content is unknown until the first refresh establishes a baseline;
+      // report a full-frame change so a partial update() takes the full-frame path.
+      return {0, 0, EPD_WIDTH, EPD_HEIGHT};
+    }
     return find_changed_region(this->buffer_, this->previous_frame_buffer_);
   }
   return this->tracked_region_;
@@ -445,6 +449,12 @@ void EpaperSpectra6133::update_previous_frame_() {
       ESP_LOGW(TAG, "Previous-frame buffer allocation failed — falling back to track mode");
       this->change_detection_mode_ = ChangeDetectionMode::TRACK;
       return;
+    }
+    if (!this->active_operation_.use_full_frame) {
+      // A region sync covers only the transferred windows. Seed the rest with
+      // 0xFF (never a valid packed colour code) so untransferred pixels can
+      // never accidentally match the framebuffer and stay detectable as changed.
+      std::memset(this->previous_frame_buffer_, 0xFF, FULL_FRAME_SIZE);
     }
     ESP_LOGI(TAG, "Previous-frame buffer allocated (%u bytes, PSRAM)", static_cast<unsigned>(FULL_FRAME_SIZE));
   }

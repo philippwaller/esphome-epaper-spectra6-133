@@ -354,6 +354,8 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
    *
    * In COMPARE mode, compares the current framebuffer against the previous
    * displayed frame and returns the bounding box of all differing pixels.
+   * Before the first refresh has established that baseline, the panel content
+   * is unknown and a full-frame change is reported.
    *
    * Returns an empty region if no changes are detected.
    */
