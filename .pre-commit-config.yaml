@@ -39,7 +39,7 @@ repos:
         args: [--fix]
       - id: ruff-format
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v22.1.5
+    rev: v23.1.0
     hooks:
       - id: clang-format
         files: ^(components/.*\.(c|cc|cpp|cxx|h|hh|hpp)|ref/GDEP133C02/main/.*\.(c|h))$
