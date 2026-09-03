@@ -30,7 +30,7 @@ substitutions:
   epd_power_pin: '10'
 
   # D/C distinguishes commands from data in classic SPI. The current standard-
-  # SPI transport does not use it; 
+  # SPI transport does not use it;
   epd_dc_pin: '10'
 
   # The vendor sample names GPIO39 and GPIO42 as additional Quad-SPI data lines
@@ -44,4 +44,3 @@ substitutions:
   # package does not enable native USB.
   native_usb_d_minus_pin: '19'
   native_usb_d_plus_pin: '20'
-  
