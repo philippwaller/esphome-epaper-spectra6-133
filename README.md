@@ -60,7 +60,7 @@ Panels marked 🔄 are expected to work, but have not been confirmed with hardwa
 | Vendor | Board | MCU | Notes |
 |---|---|---|---|
 | Good Display | [ESP32-133C02](docs/boards/good_display_esp32_133c02.md) | ESP32-S3 | Two revisions: [Ref1](packages/boards/good_display/esp32_133c02.yaml) (base) and [Ref2](packages/boards/good_display/esp32_133c02_ref2.yaml) (adds onboard buttons) |
-| Seeed Studio | [XIAO ePaper Display Board EE02](docs/boards/seeed_studio_xiao_ee02.md) | ESP32-S3 | [Package](packages/boards/seeed_studio/xiao_ee02.yaml) for the board with a soldered XIAO ESP32-S3 Plus, battery connector, and three user buttons |
+| Seeed Studio | [XIAO ePaper Display Board EE02](docs/boards/seeed_studio_xiao_ee02.md) | ESP32-S3 | [Package](#seeed-studio-xiao-epaper-display-board-ee02) for the board with a soldered XIAO ESP32-S3 Plus, battery connector, and three user buttons |
 
 See [Using Board Packages](#-using-board-packages) for import instructions.
 

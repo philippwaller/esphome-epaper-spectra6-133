@@ -20,7 +20,7 @@ buttons.
 ## Important notes
 
 - The USB-C port is wired to the ESP32-S3 native USB peripheral. Flash the first
-  ESPHome build over USB and use OTA afterwards. The package configures the
+  ESPHome build over USB and use OTA afterward. The package configures the
   logger for `USB_SERIAL_JTAG`.
 - UART0 is not usable for logging: GPIO43 and GPIO44 are wired to the panel
   power switch and the left chip select.
