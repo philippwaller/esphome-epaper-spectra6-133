@@ -926,6 +926,139 @@ TEST_F(EpaperSpectra6133ComponentTest, CompareModeFindsDirtyPixelsOutsideRefresh
   EXPECT_LT(remaining.y, 650);
 }
 
+// ---------------------------------------------------------------------------
+// 26. sleep() transfers nothing to the panel, so it must not clear pending
+//     dirty tracking (track mode).
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, SleepPreservesTrackedRegion) {
+  set_change_detection_mode(ChangeDetectionMode::TRACK);
+
+  draw_pixel(100, 200);
+  ASSERT_FALSE(detect_changed_region().empty());
+
+  display_.sleep();
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  // The pixel was never sent to the panel — it must still be pending.
+  EXPECT_FALSE(detect_changed_region().empty());
+}
+
+// ---------------------------------------------------------------------------
+// 27. sleep() must not sync the framebuffer into previous_frame_buffer_ —
+//     the panel never received those pixels (compare mode).
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, SleepPreservesPreviousFrameBaseline) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+  // Keep the display awake after the refresh so sleep() below actually
+  // schedules a SLEEP operation instead of being an already-sleeping no-op.
+  display_.set_auto_sleep(false);
+
+  // Establish a real baseline via a full refresh.
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  std::memset(buf, 0x11, FULL_FRAME_SIZE);
+  display_.refresh();
+  run_loop_until_done();
+  ASSERT_TRUE(has_previous_frame_buffer());
+
+  // Draw changes the panel never receives, then sleep.
+  for (int y = 300; y < 350; y++) {
+    std::memset(buf + static_cast<size_t>(y) * ROW_BYTES, 0xAA, ROW_BYTES);
+  }
+  display_.sleep();
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  // Baseline must still hold the last displayed content, keeping the
+  // undisplayed changes detectable.
+  EXPECT_TRUE(previous_frame_is_byte(static_cast<size_t>(300) * ROW_BYTES, 50 * ROW_BYTES, 0x11));
+  EXPECT_FALSE(detect_changed_region().empty());
+}
+
+// ---------------------------------------------------------------------------
+// 28. A bare sleep() before any refresh must not allocate and seed the
+//     previous-frame baseline from content the panel never displayed.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, SleepDoesNotEstablishPreviousFrameBaseline) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+  ASSERT_FALSE(has_previous_frame_buffer());
+
+  display_.sleep();
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  EXPECT_FALSE(has_previous_frame_buffer());
+}
+
+// ---------------------------------------------------------------------------
+// 29. In compare mode without a baseline the panel content is unknown, so
+//     detect_changed_region() must report a full-frame change instead of the
+//     tracked rectangle.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, CompareModeWithoutBaselineReportsFullFrameChange) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+  ASSERT_FALSE(has_previous_frame_buffer());
+
+  draw_pixel(100, 200);
+
+  const UpdateRegion changed = detect_changed_region();
+  EXPECT_EQ(changed.x, 0);
+  EXPECT_EQ(changed.y, 0);
+  EXPECT_EQ(changed.width, EPD_WIDTH);
+  EXPECT_EQ(changed.height, EPD_HEIGHT);
+}
+
+// ---------------------------------------------------------------------------
+// 30. The first partial update() in compare mode must take the full-frame
+//     path and establish a complete baseline — even for content written
+//     without going through the pixel-tracking draw path.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, CompareModeFirstPartialUpdateEstablishesFullBaseline) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+  display_.set_refresh_mode(RefreshMode::PARTIAL);
+  ASSERT_FALSE(has_previous_frame_buffer());
+
+  // Bulk write bypasses draw_absolute_pixel_internal, so nothing is tracked.
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  std::memset(buf, 0x11, FULL_FRAME_SIZE);
+
+  display_.update();
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+
+  ASSERT_TRUE(has_previous_frame_buffer());
+  EXPECT_TRUE(previous_frame_matches_buffer(0, FULL_FRAME_SIZE));
+  EXPECT_TRUE(detect_changed_region().empty());
+}
+
+// ---------------------------------------------------------------------------
+// 31. A region refresh that allocates the baseline must leave pixels outside
+//     the synced windows marked as unknown (never matching real panel
+//     content) so they stay detectable as changed.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshWithoutBaselineKeepsOutsidePixelsDetectable) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+  ASSERT_FALSE(has_previous_frame_buffer());
+
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  std::memset(buf, 0x11, FULL_FRAME_SIZE);
+
+  display_.refresh_region(0, 100, EPD_WIDTH, 50);
+  run_loop_until_done();
+  ASSERT_FALSE(display_.is_processing());
+  ASSERT_TRUE(has_previous_frame_buffer());
+
+  // Rows inside the refreshed region are synced to the framebuffer.
+  EXPECT_TRUE(previous_frame_matches_buffer(static_cast<size_t>(100) * ROW_BYTES, 50 * ROW_BYTES));
+  // Rows outside carry the unknown-content marker, not accidental matches.
+  EXPECT_TRUE(previous_frame_is_byte(static_cast<size_t>(600) * ROW_BYTES, 50 * ROW_BYTES, 0xFF));
+  // The unsynced remainder of the frame must still register as changed.
+  EXPECT_FALSE(detect_changed_region().empty());
+}
+
 // All tests in this section call deprecated methods intentionally.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
