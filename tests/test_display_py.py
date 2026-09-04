@@ -16,7 +16,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-
 ROOT_DIR = Path(__file__).resolve().parents[1]
 COMPONENT_DIR = ROOT_DIR / "components" / "epaper_spectra6_133"
 

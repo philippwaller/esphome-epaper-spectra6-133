@@ -3,9 +3,9 @@
 import logging
 
 import esphome.codegen as cg
+import esphome.config_validation as cv
 from esphome import pins
 from esphome.components import display as display_core
-import esphome.config_validation as cv
 from esphome.const import CONF_ID, CONF_LAMBDA
 
 from . import (
@@ -18,11 +18,11 @@ from . import (
     CONF_CS1_PIN,
     CONF_DATA0_PIN,
     CONF_DATA1_PIN,
-    CONF_POWER_PIN,
     CONF_POWER_OFF_AFTER_SLEEP,
+    CONF_POWER_PIN,
+    CONF_REFRESH_MODE,
     CONF_RESET_PIN,
     CONF_SPI_HOST,
-    CONF_REFRESH_MODE,
     CONF_UPDATE_MODE,
     EpaperSpectra6133,
     _validate_spi_host,

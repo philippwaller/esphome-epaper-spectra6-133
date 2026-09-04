@@ -10,14 +10,14 @@ import argparse
 import importlib.util
 import io
 import json
-from pathlib import Path
 import sys
 import tempfile
 import textwrap
 import unittest
+from pathlib import Path
+from typing import Self
 from unittest.mock import patch
 from urllib.error import HTTPError
-
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = ROOT_DIR / "scripts" / "esphome-versions.py"
@@ -34,7 +34,7 @@ SPEC.loader.exec_module(MODULE)
 class FakeResponse(io.BytesIO):
     """Minimal context-managed response object for mocked urlopen calls."""
 
-    def __enter__(self) -> FakeResponse:
+    def __enter__(self) -> Self:
         """Return the in-memory response for use in a with-statement."""
         return self
 
@@ -110,9 +110,11 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
             fp=None,
         )
 
-        with patch.object(MODULE, "urlopen", side_effect=error):
-            with self.assertRaisesRegex(RuntimeError, "not found on PyPI"):
-                MODULE.matching_versions("missing", ">=1")
+        with (
+            patch.object(MODULE, "urlopen", side_effect=error),
+            self.assertRaisesRegex(RuntimeError, "not found on PyPI"),
+        ):
+            MODULE.matching_versions("missing", ">=1")
 
     def test_latest_version_selects_highest_stable_release(self) -> None:
         """Pick the newest version from already-filtered stable releases."""
@@ -423,16 +425,18 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
             requirements_file=ROOT_DIR / "requirements.txt",
             mode="compile-compatibility-window",
         )
-        with patch.object(
-            MODULE, "matching_versions", return_value=["2026.1.0", "2026.2.1"]
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                MODULE, "matching_versions", return_value=["2026.1.0", "2026.2.1"]
+            ),
+            patch.object(
                 MODULE,
                 "discover_standalone_configs",
                 return_value=["configs/clock.yaml", "configs/hello-world.yaml"],
-            ):
-                with patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                    MODULE.emit_matrix(args)
+            ),
+            patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            MODULE.emit_matrix(args)
 
         self.assertEqual(
             json.loads(stdout.getvalue()),
@@ -455,13 +459,15 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
             requirements_file=ROOT_DIR / "requirements.txt",
             format="json",
         )
-        with patch.object(
-            MODULE,
-            "matching_versions",
-            return_value=["2026.1.0", "2026.2.1", "2026.3.0rc1"],
+        with (
+            patch.object(
+                MODULE,
+                "matching_versions",
+                return_value=["2026.1.0", "2026.2.1", "2026.3.0rc1"],
+            ),
+            patch("sys.stdout", new_callable=io.StringIO) as stdout,
         ):
-            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                MODULE.emit_latest_version(args)
+            MODULE.emit_latest_version(args)
 
         self.assertEqual(
             json.loads(stdout.getvalue()),
@@ -483,9 +489,11 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
             requirements_file=ROOT_DIR / "requirements.txt",
         )
         versions = ["2026.1.0", "2026.2.1", "2026.3.0rc1"]
-        with patch.object(MODULE, "matching_versions", return_value=versions):
-            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                MODULE.emit_version_set_snapshot(args)
+        with (
+            patch.object(MODULE, "matching_versions", return_value=versions),
+            patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            MODULE.emit_version_set_snapshot(args)
 
         self.assertEqual(
             json.loads(stdout.getvalue()),
@@ -532,13 +540,15 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
 
     def test_emit_compile_configs_uses_discovered_configs(self) -> None:
         """Print discovered compile configs one per line."""
-        with patch.object(
-            MODULE,
-            "discover_standalone_configs",
-            return_value=["configs/clock.yaml", "configs/hello-world.yaml"],
+        with (
+            patch.object(
+                MODULE,
+                "discover_standalone_configs",
+                return_value=["configs/clock.yaml", "configs/hello-world.yaml"],
+            ),
+            patch("sys.stdout", new_callable=io.StringIO) as stdout,
         ):
-            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                MODULE.emit_compile_configs(argparse.Namespace())
+            MODULE.emit_compile_configs(argparse.Namespace())
 
         self.assertEqual(
             stdout.getvalue(),
@@ -554,8 +564,9 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch.object(MODULE, "matching_versions", return_value=["2026.1.0"]):
-                with patch.object(
+            with (
+                patch.object(MODULE, "matching_versions", return_value=["2026.1.0"]),
+                patch.object(
                     sys,
                     "argv",
                     [
@@ -564,9 +575,10 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
                         "--requirements-file",
                         str(requirements_file),
                     ],
-                ):
-                    with patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                        MODULE.main()
+                ),
+                patch("sys.stdout", new_callable=io.StringIO) as stdout,
+            ):
+                MODULE.main()
 
         self.assertEqual(stdout.getvalue().strip(), "2026.1.0")
 
@@ -579,10 +591,11 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch.object(
-                MODULE, "matching_versions", return_value=["2026.1.0", "2026.2.1"]
-            ):
-                with patch.object(
+            with (
+                patch.object(
+                    MODULE, "matching_versions", return_value=["2026.1.0", "2026.2.1"]
+                ),
+                patch.object(
                     sys,
                     "argv",
                     [
@@ -591,9 +604,10 @@ class EsphomeVersionsScriptTests(unittest.TestCase):
                         "--requirements-file",
                         str(requirements_file),
                     ],
-                ):
-                    with patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                        MODULE.main()
+                ),
+                patch("sys.stdout", new_callable=io.StringIO) as stdout,
+            ):
+                MODULE.main()
 
         self.assertEqual(stdout.getvalue().strip(), "2026.2.1")
 

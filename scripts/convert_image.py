@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from dataclasses import dataclass
 from functools import lru_cache
@@ -528,14 +529,12 @@ def _quantize_to_palette(image, dither: str, Image):
 
 def _map_without_dither(src_bytes: bytes, dst_indices: bytearray) -> None:
     """Map each RGB pixel directly to the nearest palette entry."""
-    out_pos = 0
-    for src_pos in range(0, len(src_bytes), 3):
+    for out_pos, src_pos in enumerate(range(0, len(src_bytes), 3)):
         dst_indices[out_pos] = _nearest_palette_index(
             src_bytes[src_pos],
             src_bytes[src_pos + 1],
             src_bytes[src_pos + 2],
         )
-        out_pos += 1
 
 
 def _nearest_palette_index(r: int, g: int, b: int) -> int:
@@ -739,7 +738,9 @@ def _dither_atkinson(
 
 def _clamp(value: float) -> int:
     """Clamp a float to the 0-255 integer range."""
-    return max(0, min(255, int(round(value))))
+    if not math.isfinite(value):
+        raise ValueError("value must be finite")
+    return max(0, min(255, round(value)))
 
 
 # ---------------------------------------------------------------------------
@@ -812,7 +813,7 @@ def _short_dither(dither: str) -> str:
 
 def _fmt100(value: float) -> str:
     """Format a multiplier as a zero-padded percentage integer (1.08 -> 108)."""
-    return f"{int(round(value * 100)):03d}"
+    return f"{round(value * 100):03d}"
 
 
 # ---------------------------------------------------------------------------

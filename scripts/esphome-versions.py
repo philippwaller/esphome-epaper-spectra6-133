@@ -8,12 +8,12 @@ README/CONTRIBUTING snippets from the effective requirements.txt specifier.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
-from dataclasses import dataclass
 import hashlib
 import json
-from pathlib import Path
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
