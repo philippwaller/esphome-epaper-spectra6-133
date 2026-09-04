@@ -635,25 +635,32 @@ void EpaperSpectra6133::abort_display_operation_() {
 }
 
 /**
- * @brief Finalises a completed display operation: cleanup, update previous frame, reset tracking, and clear.
+ * @brief Finalises a completed display operation: cleanup, update previous frame (unless SLEEP), reset tracking
+ * (unless SLEEP), and clear.
  *
  * For region operations, only the refreshed rectangle is synced into the previous-frame buffer
  * (compare mode) and dirty tracking is cleared only when the refreshed rect fully contains the
  * current tracked region (track mode).  This preserves pending changes outside the refreshed
  * area so the next partial update does not skip pixels the panel never received.
+ *
+ * SLEEP operations transfer nothing to the panel, so the previous-frame baseline and dirty
+ * tracking are left untouched — otherwise pixels drawn before sleep() would be silently
+ * dropped from the next partial refresh.
  */
 void EpaperSpectra6133::finish_display_operation_() {
   if (!this->active_operation_.use_full_frame && !this->sleeping_) {
     this->controller_.disable_partial_regions();
   }
-  this->update_previous_frame_();
-  if (this->active_operation_.use_full_frame) {
-    this->reset_change_tracking();
-  } else {
-    const UpdateRegion &tr = this->tracked_region_;
-    if (partial_regions_contain_tracked_region(this->active_operation_.regions, this->active_operation_.has_region,
-                                               tr)) {
+  if (this->active_operation_.type != DisplayOperationType::SLEEP) {
+    this->update_previous_frame_();
+    if (this->active_operation_.use_full_frame) {
       this->reset_change_tracking();
+    } else {
+      const UpdateRegion &tr = this->tracked_region_;
+      if (partial_regions_contain_tracked_region(this->active_operation_.regions, this->active_operation_.has_region,
+                                                 tr)) {
+        this->reset_change_tracking();
+      }
     }
   }
   this->active_operation_ = {};
