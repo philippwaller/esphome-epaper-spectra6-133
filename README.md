@@ -50,8 +50,8 @@ An ESPHome display component for large-format 13.3″ Spectra 6 e-paper panels. 
 | Vendor | Model | Status |
 |---|---|---|
 | Good Display | GDEP133C02 | ✅ Tested |
+| Seeed Studio | T133A01 | ✅ Tested ([#92](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/92)) |
 | Waveshare | 13.3inch e-Paper (F) | 🔄 Not yet confirmed |
-| Seeed Studio | 13.3″ ePaper Display | 🔄 Not yet confirmed |
 
 Panels marked 🔄 are expected to work, but have not been confirmed with hardware. If you own one of these panels, please [open an issue](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues) with your test results.
 
