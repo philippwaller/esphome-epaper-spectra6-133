@@ -31,6 +31,27 @@ An ESPHome display component for large-format 13.3″ Spectra 6 e-paper panels. 
 | **Refresh without blocking ESPHome** | Long-running panel updates are handled as cooperative display operations across `loop()` iterations, so WiFi, sensors, API traffic, and automations keep running. |
 | **Update only what changed** | Choose full refreshes for complete frames or partial refreshes for the detected changed region. |
 
+### How does this compare to ESPHome's native support?
+
+Since release 2026.7.0, ESPHome ships a native driver for this panel class: the [`epaper_spi`](https://esphome.io/components/display/epaper_spi/) platform with `model: T133A01` (used by the Seeed reTerminal E1004). Like this component, it refreshes the panel without blocking the ESPHome main loop. If you have a supported integrated board and only need periodic full-screen updates from a lambda, the native driver is a fine choice with zero external dependencies.
+
+This component remains useful when you need more than that. The differences at a glance:
+
+| You want to … | This component | Native `epaper_spi` (T133A01) |
+| --- | --- | --- |
+| Update the full screen without blocking ESPHome | ✅ | ✅ |
+| Refresh only the part of the screen that changed | ✅ `refresh_mode: partial` with automatic change detection | ❌ Always transfers and refreshes the full frame |
+| Draw outside the display lambda (e.g. from automations or buttons) | ✅ `refresh()`, `refresh_region()`, `update_region()`, `cancel()` | ❌ `update()` only — drawing happens in the lambda |
+| Cut the panel's power completely between updates | ✅ `power_off_after_sleep` switches the panel's power rail off | ❌ Not supported |
+| Let the panel sleep automatically after refresh | ✅ Default, plus manual control via `sleep()` / `wake()` and `auto_sleep: false` for bursts of consecutive updates | ✅ Default |
+| Rotate the image | ✅ `rotation` (0°/90°/180°/270°) | ✅ |
+| Mirror the image horizontally or vertically | ❌ | ✅ `transform:` with `mirror_x` / `mirror_y` |
+
+> [!NOTE]
+> Partial refresh does not shorten the panel's refresh cycle — a Spectra 6 refresh still takes its usual time. The benefit is that only the changed region visibly updates, while the rest of the screen stays untouched instead of flashing through a full-screen refresh.
+
+In short: for clocks, dashboards, and automation-driven screens where you only want to update part of the screen, this component gives you the tools to do it. If you don't need any of that, it's worth trying the native integration first — and you're always welcome back here when your project outgrows it.
+
 ---
 
 ## 📋 Requirements
