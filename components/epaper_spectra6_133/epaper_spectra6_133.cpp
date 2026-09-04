@@ -598,16 +598,9 @@ void EpaperSpectra6133::schedule_display_operation_(DisplayOperationType type, i
 }
 
 /**
- * @brief Cleans up hardware state after a cancelled operation and clears active_operation_.
+ * @brief Aborts the active display operation and restores safe controller state.
  *
- * Always releases all CS pins and disables partial-region mode so the
- * display controller is left in a known-safe state for the next operation,
- * regardless of which stage was interrupted. By the time this is called, BUSY
- * has already been released and any POST_REFRESH_DELAY settle window has elapsed,
- * so sending disable_partial_regions() via SPI is safe.
- *
- * If a pending operation was queued while we were draining a refresh stage, it
- * is started immediately so is_processing() remains true without a gap.
+ * Starts a queued operation when one is pending; otherwise, stops loop processing.
  */
 void EpaperSpectra6133::abort_display_operation_() {
   this->controller_.end_half_transfer();  // safe to call even if CS was already high
@@ -635,17 +628,12 @@ void EpaperSpectra6133::abort_display_operation_() {
 }
 
 /**
- * @brief Finalises a completed display operation: cleanup, update previous frame (unless SLEEP), reset tracking
- * (unless SLEEP), and clear.
+ * @brief Finalizes a completed display operation and preserves pending changes when necessary.
  *
- * For region operations, only the refreshed rectangle is synced into the previous-frame buffer
- * (compare mode) and dirty tracking is cleared only when the refreshed rect fully contains the
- * current tracked region (track mode).  This preserves pending changes outside the refreshed
- * area so the next partial update does not skip pixels the panel never received.
- *
- * SLEEP operations transfer nothing to the panel, so the previous-frame baseline and dirty
- * tracking are left untouched — otherwise pixels drawn before sleep() would be silently
- * dropped from the next partial refresh.
+ * Synchronizes the previous-frame baseline and clears dirty-region tracking for completed
+ * refresh operations. For partial refreshes, only the refreshed regions are synchronized, and
+ * tracking is cleared only when those regions contain the entire tracked region. Sleep operations
+ * leave the baseline and dirty-region tracking unchanged because they do not refresh the panel.
  */
 void EpaperSpectra6133::finish_display_operation_() {
   if (!this->active_operation_.use_full_frame && !this->sleeping_) {
