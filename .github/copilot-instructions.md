@@ -66,6 +66,10 @@ When changing examples or documentation:
 - Do not duplicate API reference text across multiple README sections.
 - Prefer user-facing explanations over implementation trivia.
 - Mention hardware caveats only where they help the user make a correct decision.
+- When adding or moving release-pinned examples, wrap them in
+  `x-release-please-start-version` and `x-release-please-end` markers and add
+  the containing file to `packages["."].extra-files` in
+  `release-please-config.json`; markers alone do not register a file.
 
 ## Naming rules
 
