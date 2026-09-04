@@ -96,6 +96,8 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-
       - name: Set up local developer environment
         run: bash ./scripts/setup.sh
       - name: Run pre-commit checks
