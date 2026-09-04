@@ -1,8 +1,8 @@
 """Shared constants and validators for the ``epaper_spectra6_133`` component."""
 
 import esphome.codegen as cg
-from esphome.components import display as display_core
 import esphome.config_validation as cv
+from esphome.components import display as display_core
 
 CONF_SPI_HOST = "spi_host"
 CONF_CS0_PIN = "cs0_pin"
