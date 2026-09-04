@@ -22,6 +22,7 @@
       "extra-files": [
         "README.md",
         "docs/boards/good_display_esp32_133c02.md",
+        { "type": "generic", "path": "docs/boards/seeed_studio_xiao_ee02.md" },
         { "type": "generic", "path": "configs/hello-world.yaml" },
         { "type": "generic", "path": "configs/image.yaml" },
         { "type": "generic", "path": "configs/clock.yaml" },
