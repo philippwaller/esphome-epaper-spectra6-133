@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from dataclasses import dataclass
 from functools import lru_cache
@@ -737,6 +738,8 @@ def _dither_atkinson(
 
 def _clamp(value: float) -> int:
     """Clamp a float to the 0-255 integer range."""
+    if not math.isfinite(value):
+        raise ValueError("value must be finite")
     return max(0, min(255, round(value)))
 
 
