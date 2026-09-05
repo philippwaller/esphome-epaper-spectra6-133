@@ -167,6 +167,31 @@ class EpaperSpectra6133ComponentTest : public ::testing::Test {
   // Direct access to buffer_ for test setup.
   uint8_t *buffer() const { return display_.buffer_; }
 
+  UpdateRegion refresh_region_with_change_during_wait(int x, int y) {
+    set_change_detection_mode(ChangeDetectionMode::COMPARE);
+    uint8_t *buf = buffer();
+    EXPECT_NE(buf, nullptr);
+    if (buf == nullptr) {
+      return {};
+    }
+    std::memset(buf, 0x11, FULL_FRAME_SIZE);
+    display_.refresh();
+    run_loop_until_done();
+
+    display_.refresh_region(x, y, 1, 2);
+    for (int i = 0; i < 2000 && operation_stage() != DisplayOperationStage::WAIT_REFRESH; i++) {
+      g_mock_timer_us += 1000000LL;
+      display_.loop();
+    }
+    EXPECT_EQ(operation_stage(), DisplayOperationStage::WAIT_REFRESH);
+
+    set_display_busy(true);
+    draw_pixel(x, y);
+    set_display_busy(false);
+    run_loop_until_done();
+    return detect_changed_region();
+  }
+
   EpaperSpectra6133 display_;
 };
 
@@ -844,6 +869,26 @@ TEST_F(EpaperSpectra6133ComponentTest, RefreshKeepsChangesDrawnDuringWaitRefresh
   run_loop_until_done();
 
   EXPECT_FALSE(detect_changed_region().empty());
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshKeepsLeftHalfChangesDrawnDuringWaitRefreshPending) {
+  const UpdateRegion changed = refresh_region_with_change_during_wait(10, 100);
+
+  EXPECT_FALSE(changed.empty());
+  EXPECT_LE(changed.x, 10);
+  EXPECT_GT(changed.x + changed.width, 10);
+  EXPECT_LE(changed.y, 100);
+  EXPECT_GT(changed.y + changed.height, 100);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshKeepsRightHalfChangesDrawnDuringWaitRefreshPending) {
+  const UpdateRegion changed = refresh_region_with_change_during_wait(610, 100);
+
+  EXPECT_FALSE(changed.empty());
+  EXPECT_LE(changed.x, 610);
+  EXPECT_GT(changed.x + changed.width, 610);
+  EXPECT_LE(changed.y, 100);
+  EXPECT_GT(changed.y + changed.height, 100);
 }
 
 // ---------------------------------------------------------------------------
