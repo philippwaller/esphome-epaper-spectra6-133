@@ -449,8 +449,14 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   bool initialize();
   // Lazily initializes the panel on the first operation that needs hardware access.
   bool ensure_initialized_();
-  // Copies the current framebuffer to the previous-frame buffer (compare mode).
+  // Copies the transferred-frame snapshot to the previous-frame buffer (compare mode).
   void update_previous_frame_();
+  // Allocates the compare-mode snapshot used to retain bytes sent before a refresh completes.
+  bool allocate_transfer_snapshot_();
+  // Saves an exact byte range after its SPI transfer succeeds.
+  void snapshot_transferred_bytes_(size_t offset, size_t length);
+  // Releases the operation-scoped compare-mode snapshot.
+  void release_transfer_snapshot_();
 
   // -------------------------------------------------------------------------
   // Display operation management helpers.
@@ -506,6 +512,7 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   bool sleeping_{false};
   UpdateRegion tracked_region_{};
   uint8_t *previous_frame_buffer_{nullptr};
+  uint8_t *transfer_snapshot_{nullptr};
   uint32_t draw_pixels_since_yield_{0};
   DisplayOperation active_operation_{};
   // Holds an operation that arrived while the panel was in a hardware refresh stage.

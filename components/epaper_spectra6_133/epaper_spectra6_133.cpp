@@ -8,6 +8,8 @@
 #include "epaper_spectra6_133.h"
 #include "epaper_spectra6_133_framebuffer.h"
 
+#include <cstdlib>
+
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -440,7 +442,7 @@ bool EpaperSpectra6133::ensure_initialized_() {
 }
 
 /**
- * @brief Copies sent pixels from the framebuffer into the previous-frame buffer (compare mode).
+ * @brief Copies sent pixels from the transfer snapshot into the previous-frame buffer (compare mode).
  *
  * For full-frame operations the entire buffer is copied. For region operations
  * only the clipped controller byte windows that were actually sent to the panel
@@ -448,7 +450,7 @@ bool EpaperSpectra6133::ensure_initialized_() {
  * find_changed_region() still sees them as pending on the next cycle.
  */
 void EpaperSpectra6133::update_previous_frame_() {
-  if (this->buffer_ == nullptr) {
+  if (this->transfer_snapshot_ == nullptr) {
     return;
   }
   if (this->change_detection_mode_ != ChangeDetectionMode::COMPARE) {
@@ -471,7 +473,7 @@ void EpaperSpectra6133::update_previous_frame_() {
     ESP_LOGI(TAG, "Previous-frame buffer allocated (%u bytes, PSRAM)", static_cast<unsigned>(FULL_FRAME_SIZE));
   }
   if (this->active_operation_.use_full_frame) {
-    std::memcpy(this->previous_frame_buffer_, this->buffer_, FULL_FRAME_SIZE);
+    std::memcpy(this->previous_frame_buffer_, this->transfer_snapshot_, FULL_FRAME_SIZE);
   } else {
     for (int i = 0; i < 2; i++) {
       if (!this->active_operation_.has_region[i]) {
@@ -481,10 +483,35 @@ void EpaperSpectra6133::update_previous_frame_() {
       for (int row = 0; row < static_cast<int>(region.height); row++) {
         const size_t offset =
             (static_cast<size_t>(region.y_start) + static_cast<size_t>(row)) * ROW_BYTES + region.row_byte_offset;
-        std::memcpy(this->previous_frame_buffer_ + offset, this->buffer_ + offset, region.row_byte_count);
+        std::memcpy(this->previous_frame_buffer_ + offset, this->transfer_snapshot_ + offset, region.row_byte_count);
       }
     }
   }
+}
+
+bool EpaperSpectra6133::allocate_transfer_snapshot_() {
+  if (this->change_detection_mode_ != ChangeDetectionMode::COMPARE) {
+    return true;
+  }
+  this->release_transfer_snapshot_();
+  this->transfer_snapshot_ =
+      static_cast<uint8_t *>(heap_caps_malloc(FULL_FRAME_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (this->transfer_snapshot_ == nullptr) {
+    ESP_LOGE(TAG, "Transfer snapshot allocation failed — refresh skipped to preserve compare baseline");
+    return false;
+  }
+  return true;
+}
+
+void EpaperSpectra6133::snapshot_transferred_bytes_(size_t offset, size_t length) {
+  if (this->transfer_snapshot_ != nullptr) {
+    std::memcpy(this->transfer_snapshot_ + offset, this->buffer_ + offset, length);
+  }
+}
+
+void EpaperSpectra6133::release_transfer_snapshot_() {
+  std::free(this->transfer_snapshot_);
+  this->transfer_snapshot_ = nullptr;
 }
 // =============================================================================
 // Cooperative display pipeline
@@ -691,6 +718,7 @@ void EpaperSpectra6133::abort_display_operation_() {
   if (this->active_operation_.refresh_completed && this->active_operation_.type != DisplayOperationType::SLEEP) {
     this->commit_refresh_result_();
   }
+  this->release_transfer_snapshot_();
   this->active_operation_ = {};
   ESP_LOGD(TAG, "Display operation aborted");
 
@@ -720,6 +748,7 @@ void EpaperSpectra6133::finish_display_operation_() {
   if (this->active_operation_.type != DisplayOperationType::SLEEP) {
     this->commit_refresh_result_();
   }
+  this->release_transfer_snapshot_();
   this->active_operation_ = {};
   ESP_LOGD(TAG, "Display operation completed");
 
@@ -913,10 +942,7 @@ void EpaperSpectra6133::process_init_stage_() {
     this->active_operation_.use_full_frame = true;
   }
 
-  if (this->active_operation_.use_full_frame) {
-    this->active_operation_.current_row = 0;
-    this->active_operation_.stage = DisplayOperationStage::TRANSFER_LEFT_HALF;
-  } else {
+  if (!this->active_operation_.use_full_frame) {
     this->controller_.compute_partial_regions(
         this->active_operation_.region_x, this->active_operation_.region_y, this->active_operation_.region_width,
         this->active_operation_.region_height, this->active_operation_.regions, this->active_operation_.has_region);
@@ -927,9 +953,16 @@ void EpaperSpectra6133::process_init_stage_() {
       this->disable_loop();
       return;
     }
-    this->active_operation_.current_row = 0;
-    this->active_operation_.stage = DisplayOperationStage::TRANSFER_LEFT_REGION;
   }
+
+  if (!this->allocate_transfer_snapshot_()) {
+    this->abort_display_operation_();
+    return;
+  }
+
+  this->active_operation_.current_row = 0;
+  this->active_operation_.stage = this->active_operation_.use_full_frame ? DisplayOperationStage::TRANSFER_LEFT_HALF
+                                                                         : DisplayOperationStage::TRANSFER_LEFT_REGION;
 }
 
 /**
@@ -956,6 +989,8 @@ void EpaperSpectra6133::process_transfer_left_half_stage_() {
       this->abort_display_operation_();
       return;
     }
+    this->snapshot_transferred_bytes_(static_cast<size_t>(this->active_operation_.current_row) * ROW_BYTES,
+                                      HALF_ROW_BYTES);
     this->active_operation_.current_row++;
   }
 
@@ -988,6 +1023,8 @@ void EpaperSpectra6133::process_transfer_right_half_stage_() {
       this->abort_display_operation_();
       return;
     }
+    this->snapshot_transferred_bytes_(
+        static_cast<size_t>(this->active_operation_.current_row) * ROW_BYTES + HALF_ROW_BYTES, HALF_ROW_BYTES);
     this->active_operation_.current_row++;
   }
 
@@ -1025,6 +1062,10 @@ void EpaperSpectra6133::process_transfer_left_region_stage_() {
       this->abort_display_operation_();
       return;
     }
+    this->snapshot_transferred_bytes_(
+        (static_cast<size_t>(region.y_start) + static_cast<size_t>(this->active_operation_.current_row)) * ROW_BYTES +
+            region.row_byte_offset,
+        region.row_byte_count);
     this->active_operation_.current_row++;
   }
 
@@ -1062,6 +1103,10 @@ void EpaperSpectra6133::process_transfer_right_region_stage_() {
       this->abort_display_operation_();
       return;
     }
+    this->snapshot_transferred_bytes_(
+        (static_cast<size_t>(region.y_start) + static_cast<size_t>(this->active_operation_.current_row)) * ROW_BYTES +
+            region.row_byte_offset,
+        region.row_byte_count);
     this->active_operation_.current_row++;
   }
 

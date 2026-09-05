@@ -823,6 +823,29 @@ TEST_F(EpaperSpectra6133ComponentTest, FullRefreshSyncsEntirePreviousFrameBuffer
   EXPECT_TRUE(previous_frame_matches_buffer(0, FULL_FRAME_SIZE));
 }
 
+TEST_F(EpaperSpectra6133ComponentTest, RefreshKeepsChangesDrawnDuringWaitRefreshPending) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+
+  uint8_t *buf = buffer();
+  ASSERT_NE(buf, nullptr);
+  std::memset(buf, 0x11, FULL_FRAME_SIZE);
+
+  display_.refresh();
+  for (int i = 0; i < 2000 && operation_stage() != DisplayOperationStage::WAIT_REFRESH; i++) {
+    g_mock_timer_us += 1000000LL;
+    display_.loop();
+  }
+  ASSERT_EQ(operation_stage(), DisplayOperationStage::WAIT_REFRESH);
+
+  set_display_busy(true);
+  draw_pixel(10, 10);
+
+  set_display_busy(false);
+  run_loop_until_done();
+
+  EXPECT_FALSE(detect_changed_region().empty());
+}
+
 // ---------------------------------------------------------------------------
 // 21. After a region refresh completes, only the rows inside the region are
 //     updated in previous_frame_buffer_ (compare mode); rows outside are
