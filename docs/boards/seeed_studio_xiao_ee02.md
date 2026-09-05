@@ -111,7 +111,7 @@ hardware. Other unlisted GPIOs are not documented as available expansion pins.
 <!-- x-release-please-start-version -->
 ```yaml
 packages:
-  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/seeed_studio/xiao_ee02.yaml@v0.4.0
+  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/seeed_studio/xiao_ee02.yaml@v0.5.0
 ```
 <!-- x-release-please-end -->
 
