@@ -1103,6 +1103,34 @@ TEST_F(EpaperSpectra6133ComponentTest, RegionRefreshThatDoesNotContainDirtyRectP
   EXPECT_FALSE(detect_changed_region().empty());
 }
 
+TEST_F(EpaperSpectra6133ComponentTest, UpdateCombinesPendingTrackingWithLambdaDrawing) {
+  set_change_detection_mode(ChangeDetectionMode::TRACK);
+  display_.set_refresh_mode(RefreshMode::PARTIAL);
+  display_.set_auto_sleep(false);
+
+  // This pixel remains pending because the region refresh does not transfer it.
+  draw_pixel(100, 10);
+  display_.refresh_region(0, 500, EPD_WIDTH, 200);
+  run_loop_until_done();
+  ASSERT_FALSE(detect_changed_region().empty());
+
+  // A subsequent update draws elsewhere. Both the pending and newly drawn
+  // pixels must be transferred together.
+  display_.set_update_callback([this]() { draw_pixel(900, 600); });
+  display_.update();
+  display_.loop();
+
+  EXPECT_EQ(operation_type(), DisplayOperationType::UPDATE);
+  EXPECT_EQ(operation_region_x(), 100);
+  EXPECT_EQ(operation_region_y(), 10);
+  EXPECT_EQ(operation_region_width(), 801);
+  EXPECT_EQ(operation_region_height(), 591);
+
+  run_loop_until_done();
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_TRUE(detect_changed_region().empty());
+}
+
 // ---------------------------------------------------------------------------
 // 25. After a region refresh, find_changed_region() still finds pixels that
 //     were outside the refreshed area (compare mode end-to-end).
