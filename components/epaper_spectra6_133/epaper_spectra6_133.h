@@ -56,8 +56,10 @@ using UpdateMode [[deprecated("Use RefreshMode; UpdateMode will be removed in ve
 // or their region variants). It is progressed from loop() one bounded step at a
 // time so that the ESPHome main loop is never blocked for long.
 //
-// Only one DisplayOperation may be active at any time. Starting a new operation
-// while one is running cancels the old operation first.
+// Only one DisplayOperation may be active at any time. A request that arrives
+// before the active operation has sent anything to the panel replaces it; once
+// the transfer or refresh has started, the request is queued and runs after the
+// active operation completes.
 // ---------------------------------------------------------------------------
 
 /** @brief Identifies which display operation is being performed. */
@@ -94,7 +96,7 @@ enum class DisplayOperationStage {
   WAIT_POWER_ON,       // Poll is_display_busy(); yield until BUSY goes high.
   PRE_REFRESH_DELAY,   // Non-blocking 30 ms post-PON delay before DRF.
   REFRESH_SCREEN,      // Send DRF command; transition immediately.
-  WAIT_REFRESH,        // Poll is_display_busy(); yield until BUSY goes high (up to 20 s).
+  WAIT_REFRESH,        // Poll is_display_busy(); yield until BUSY goes high (tens of seconds).
   POWER_OFF,           // Send POF command; transition immediately.
   WAIT_POWER_OFF,      // Poll is_display_busy(); yield until BUSY goes high.
   DEEP_SLEEP,          // Send DSLP+0xA5 once BUSY is idle-high.
@@ -132,22 +134,27 @@ struct DisplayOperation {
   bool has_region[2]{false, false};
   // Row streaming progress (reset to 0 on each FF/RG stage entry).
   int current_row{0};
-  // Microsecond timestamp recorded when entering PRE_REFRESH_DELAY or POST_REFRESH_DELAY.
+  // Microsecond timestamp recorded when entering a delay or BUSY-polling stage.
   int64_t stage_start_us{0};
+  // Microsecond timestamp recorded when the operation was marked CANCELLING.
+  int64_t cancel_start_us{0};
+  // True once the panel has physically completed the DRF cycle for this operation.
+  // The panel then shows the transferred pixels even if the operation is cancelled
+  // before its finalisation stage, so change detection must adopt that result.
+  bool refresh_completed{false};
 };
 
 /**
- * @brief Holds parameters for an operation requested while the panel
- *        was physically committed to a hardware refresh cycle.
+ * @brief Holds parameters for an operation requested while another operation
+ *        already owned the panel.
  *
- * When a new operation arrives while the active operation is in a refresh
- * stage and the BUSY pin is still LOW, the new operation cannot start immediately:
- * hardware cannot be interrupted.  The incoming request is stored here and
- * started automatically by abort_display_operation_() once BUSY is released and
- * the draining operation has been torn down.
+ * A request that arrives once the active operation has started talking to the
+ * panel is stored here instead of interrupting it.  The queued request is
+ * started automatically when the active operation completes
+ * (finish_display_operation_()) or is torn down (abort_display_operation_()).
  *
- * Only one pending operation is kept at a time.  A second replacement overwrites
- * the first, consistent with the existing single-operation-wins semantics.
+ * Only one pending operation is kept at a time.  A newer request overwrites
+ * the queued one, consistent with the single-operation-wins semantics.
  */
 struct PendingDisplayOperation {
   bool has_pending{false};
@@ -255,8 +262,8 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
    * and refreshes only that area.  When FULL (default), the entire
    * framebuffer is transferred.
    *
-   * If another display operation is already in progress it is superseded:
-   * the previous operation is cancelled and this one takes its place.
+   * If another display operation is already in progress, this request is queued
+   * and starts once that operation completes.
    */
   void update() override;
   /** @brief Progresses any active display operation by one bounded step. */
@@ -275,7 +282,8 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
    * Re-runs the display lambda, then transfers and refreshes only the specified
    * region cooperatively from loop().
    *
-   * If another display operation is already in progress it is superseded.
+   * If another display operation is already in progress, this request is queued
+   * and starts once that operation completes.
    *
    * @param x, y, width, height  Logical panel rectangle (pixels).
    */
@@ -295,7 +303,8 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
    * The display lambda is NOT re-run.  Existing framebuffer contents are
    * transferred and the panel is refreshed cooperatively from loop().
    *
-   * If another display operation is already in progress it is superseded.
+   * If another display operation is already in progress, this request is queued
+   * and starts once that operation completes.
    */
   void refresh();
 
@@ -313,7 +322,8 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
    * The display lambda is NOT re-run.  Only the specified region is
    * transferred and refreshed cooperatively from loop().
    *
-   * If another display operation is already in progress it is superseded.
+   * If another display operation is already in progress, this request is queued
+   * and starts once that operation completes.
    *
    * @param x, y, width, height  Logical panel rectangle (pixels).
    */
@@ -368,11 +378,11 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   // Display pipeline control
   //
   // All display operations schedule cooperative work and return immediately.
-  // Only one operation may be active at a time. Starting a new operation while one
-  // is in progress supersedes it: the previous operation is cancelled and the new
-  // one takes its place.  If the panel is physically in a hardware refresh
-  // stage, the incoming operation is queued as pending and starts automatically
-  // once the refresh drains safely.
+  // Only one operation may be active at a time. A request that arrives before the
+  // active operation has sent anything to the panel replaces it. Once the panel
+  // transfer or refresh has started, the request is queued instead and starts as
+  // soon as the active operation completes, so an in-flight refresh is never
+  // thrown away. Only the most recent queued request is kept.
   //
   // Use is_processing() to check whether any display operation is scheduled,
   // running, or draining.
@@ -450,6 +460,10 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   void request_display_operation_(DisplayOperationType type, int x, int y, int w, int h, const char *name);
   // Cancels any active operation and initialises a new one of the given type.
   void schedule_display_operation_(DisplayOperationType type, int x, int y, int w, int h);
+  // Stores a request that has to wait for the active operation to release the panel.
+  void store_pending_operation_(DisplayOperationType type, int x, int y, int w, int h);
+  // Promotes a queued request to the active operation. Returns false when none was queued.
+  bool start_pending_operation_();
   // Dispatches one bounded step for the current operation stage.
   void process_display_operation_step_();
   // Cleans up CS/PTLW state and clears the operation after cancellation.
@@ -457,6 +471,10 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   void abort_display_operation_();
   // Cleans up PTLW state, syncs shadow, and clears the operation on completion.
   void finish_display_operation_();
+  // Adopts the refreshed framebuffer as the new change-detection baseline.
+  void commit_refresh_result_();
+  // Recovers from a panel that never releases BUSY: forces a re-init and tears the operation down.
+  void handle_panel_timeout_(const char *stage_name);
   // Returns true if the current operation stage may have the panel physically busy
   // (BUSY pin potentially LOW).  Cancellation must wait until BUSY clears.
   bool is_in_hw_refresh_stage_() const;
