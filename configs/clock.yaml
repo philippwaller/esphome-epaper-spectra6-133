@@ -61,13 +61,21 @@ esphome:
             - component.update: epaper_display
 
 logger:
-  level: INFO
+  # DEBUG makes the display driver's scheduling and refresh-pipeline logs
+  # visible (operation scheduled/queued/completed). Drop back to INFO once the
+  # setup works to reduce log noise.
+  level: DEBUG
   logs:
-    epaper_spectra6_133: INFO
+    epaper_spectra6_133: DEBUG
 
 api:
   encryption:
     key: !secret api_encryption_key
+  # This clock runs on its own once SNTP is synced. Without this line ESPHome
+  # reboots the device after 15 minutes without a connected API client, which
+  # interrupts the display refresh cycle. Remove it if Home Assistant should
+  # stay connected and you want the reboot as a watchdog.
+  reboot_timeout: 0s
 
 ota:
   - platform: esphome

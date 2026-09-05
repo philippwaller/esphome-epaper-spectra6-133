@@ -27,7 +27,16 @@ static const char *const TAG = "epaper_spectra6_133";
 static constexpr int OPERATION_ROWS_PER_STEP = 8;
 
 // Timeout for the DRF busy-wait in a refresh operation (microseconds).
-static constexpr int64_t REFRESH_BUSY_TIMEOUT_US = 20000LL * 1000LL;  // 20 s
+// A full-frame Spectra 6 refresh on this panel size runs for tens of seconds and
+// slows down further at low ambient temperature, so the guard is deliberately
+// well above the typical refresh duration. Aborting a refresh that is still
+// running would leave the panel half-updated and discard the change-detection
+// baseline, which is far worse than waiting a few extra seconds.
+static constexpr int64_t REFRESH_BUSY_TIMEOUT_US = 40000LL * 1000LL;  // 40 s
+
+// Timeout for the BUSY-wait stages that only cover the panel's power sequencing
+// (PON, POF, pre-deep-sleep). These complete in milliseconds on healthy hardware.
+static constexpr int64_t POWER_BUSY_TIMEOUT_US = 10000LL * 1000LL;  // 10 s
 
 // Post-PON delay before DRF (microseconds).
 static constexpr int64_t PRE_REFRESH_DELAY_US = 30LL * 1000LL;  // 30 ms
@@ -198,8 +207,8 @@ void EpaperSpectra6133::set_update_mode(RefreshMode mode) {
  * to the panel cooperatively across successive loop() calls.  When
  * refresh_mode is PARTIAL, only the detected changed region is refreshed.
  *
- * If another display operation is already in progress it is superseded:
- * the previous operation is cancelled and this one takes its place.
+ * If another display operation is already in progress, this request is queued
+ * and starts once that operation completes.
  */
 void EpaperSpectra6133::update() {
   ESP_LOGD(TAG, "Update requested");
@@ -255,7 +264,8 @@ void EpaperSpectra6133::clear() { fill_buffer_with_code(this->buffer_, color_to_
  * Re-runs the display lambda, then transfers and refreshes only the specified
  * region cooperatively from loop().
  *
- * If another display operation is already in progress it is superseded.
+ * If another display operation is already in progress, this request is queued
+ * and starts once that operation completes.
  */
 void EpaperSpectra6133::update_region(int x, int y, int width, int height) {
   ESP_LOGD(TAG, "Region update requested: x=%d y=%d w=%d h=%d", x, y, width, height);
@@ -272,7 +282,8 @@ void EpaperSpectra6133::update_region(UpdateRegion region) {
  * The display lambda is NOT re-run.  Existing framebuffer contents are
  * transferred and the panel is refreshed cooperatively from loop().
  *
- * If another display operation is already in progress it is superseded.
+ * If another display operation is already in progress, this request is queued
+ * and starts once that operation completes.
  */
 void EpaperSpectra6133::refresh() {
   ESP_LOGD(TAG, "Refresh requested");
@@ -290,7 +301,8 @@ void EpaperSpectra6133::flush() {
  * The display lambda is NOT re-run.  Only the specified region is transferred
  * and refreshed cooperatively from loop().
  *
- * If another display operation is already in progress it is superseded.
+ * If another display operation is already in progress, this request is queued
+ * and starts once that operation completes.
  */
 void EpaperSpectra6133::refresh_region(int x, int y, int width, int height) {
   ESP_LOGD(TAG, "Refresh region requested: x=%d y=%d w=%d h=%d", x, y, width, height);
@@ -488,7 +500,8 @@ void EpaperSpectra6133::update_previous_frame_() {
  * (for example, in the middle of a DRF refresh), this method keeps polling until BUSY is
  * released before tearing down hardware state. It also lets POST_REFRESH_DELAY
  * finish before cleanup, because that settle window is SPI-unsafe even though
- * BUSY has already returned high.
+ * BUSY has already returned high.  The drain itself is bounded: a panel that
+ * never releases BUSY is recovered instead of blocking the pipeline forever.
  */
 void EpaperSpectra6133::loop() {
   if (this->active_operation_.state == DisplayOperationState::IDLE) {
@@ -506,7 +519,16 @@ void EpaperSpectra6133::loop() {
           return;  // settle window still active; poll again next loop()
         }
       } else if (this->controller_.is_display_busy()) {
+        // Without this guard a panel that never releases BUSY would keep the
+        // pipeline draining forever, silently swallowing every later request.
+        if ((esp_timer_get_time() - this->active_operation_.cancel_start_us) > REFRESH_BUSY_TIMEOUT_US) {
+          this->handle_panel_timeout_("cancellation drain");
+        }
         return;  // panel still busy; poll again next loop()
+      } else if (this->active_operation_.stage == DisplayOperationStage::WAIT_REFRESH) {
+        // BUSY was released while draining: the DRF cycle that was already in
+        // flight has finished, so the panel now shows the transferred pixels.
+        this->active_operation_.refresh_completed = true;
       }
     }
     this->abort_display_operation_();
@@ -537,6 +559,7 @@ void EpaperSpectra6133::cancel() {
     return;
   }
   this->active_operation_.state = DisplayOperationState::CANCELLING;
+  this->active_operation_.cancel_start_us = esp_timer_get_time();
 }
 
 // ---------------------------------------------------------------------------
@@ -546,14 +569,14 @@ void EpaperSpectra6133::cancel() {
 /**
  * @brief Schedules a display operation after readiness checks or safe deferral.
  *
- * Requests that arrive while a refresh or post-refresh settle stage is
- * uninterruptible must be queued before attempting wake()/initialize(); an
- * auto-sleeping panel may already have reset controller state, but it still
- * cannot accept SPI traffic until the active operation drains.
+ * Requests that arrive while the active operation already owns the panel are
+ * queued without attempting wake()/initialize(); the queued operation performs
+ * its own readiness check once it starts.
  */
 void EpaperSpectra6133::request_display_operation_(DisplayOperationType type, int x, int y, int w, int h,
                                                    const char *name) {
-  if (this->active_operation_.state != DisplayOperationState::IDLE && this->is_in_hw_refresh_stage_()) {
+  if (this->active_operation_.state != DisplayOperationState::IDLE &&
+      this->active_operation_.stage != DisplayOperationStage::INIT) {
     this->schedule_display_operation_(type, x, y, w, h);
     return;
   }
@@ -565,34 +588,34 @@ void EpaperSpectra6133::request_display_operation_(DisplayOperationType type, in
 }
 
 /**
- * @brief Cancels any active display operation and initialises a new one of @p type.
+ * @brief Starts a new operation of @p type, or queues it behind the active one.
  *
- * If the active operation is in a hardware-refresh stage or post-refresh settle
- * window, the hardware cannot be interrupted safely. In that case the active
- * operation is marked cancelled so loop() can drain it gracefully, and the new
- * request is stored as a pending operation. abort_display_operation_() will start
- * the pending operation automatically once the draining refresh has completed.
+ * A request only replaces the active operation inline while that operation is
+ * still in its INIT stage — at that point nothing has been sent to the panel, so
+ * discarding it costs nothing.
  *
- * For all other stages (data-transfer or idle) the active operation is aborted
- * inline and the new operation starts immediately.
+ * Once the active operation has started talking to the panel it is never
+ * interrupted: the request is stored as pending and starts from
+ * finish_display_operation_() after the active operation has completed its full
+ * sequence including power-off, auto-sleep, and settle window. Restarting or
+ * aborting mid-flight would throw away all progress — a caller that refreshes on
+ * a fixed interval shorter than one refresh cycle would then restart the
+ * operation forever, the change-detection baseline would never be established,
+ * and every update would fall back to a full-frame refresh.
+ *
+ * Only one pending operation is kept; a newer request replaces the queued one.
  */
 void EpaperSpectra6133::schedule_display_operation_(DisplayOperationType type, int x, int y, int w, int h) {
   if (this->active_operation_.state != DisplayOperationState::IDLE) {
-    if (this->is_in_hw_refresh_stage_()) {
-      // Panel is physically committed to a refresh or settle window; we cannot
-      // abort inline. Queue the request so it starts after the stage drains.
-      ESP_LOGD(TAG, "Display operation deferred: panel in refresh stage, will start after drain");
-      this->active_operation_.state = DisplayOperationState::CANCELLING;
-      this->pending_operation_.has_pending = true;
-      this->pending_operation_.type = type;
-      this->pending_operation_.x = x;
-      this->pending_operation_.y = y;
-      this->pending_operation_.w = w;
-      this->pending_operation_.h = h;
+    if (this->active_operation_.stage != DisplayOperationStage::INIT) {
+      // The active operation already owns the panel; let it complete first.
+      ESP_LOGD(TAG, "Display operation queued behind the running operation");
+      this->store_pending_operation_(type, x, y, w, h);
       return;
     }
-    // Safe to abort inline: CS can be released, no refresh in progress.
+    // Safe to abort inline: nothing was sent yet, no refresh in progress.
     ESP_LOGD(TAG, "Cancelled active display operation");
+    this->pending_operation_ = {};  // the newer request supersedes anything queued
     this->abort_display_operation_();
   }
   this->active_operation_ = {};
@@ -607,6 +630,41 @@ void EpaperSpectra6133::schedule_display_operation_(DisplayOperationType type, i
   ESP_LOGD(TAG, "Scheduled display operation (type=%d)", static_cast<int>(type));
 }
 
+/** @brief Stores @p type and its rectangle as the single queued request. */
+void EpaperSpectra6133::store_pending_operation_(DisplayOperationType type, int x, int y, int w, int h) {
+  this->pending_operation_.has_pending = true;
+  this->pending_operation_.type = type;
+  this->pending_operation_.x = x;
+  this->pending_operation_.y = y;
+  this->pending_operation_.w = w;
+  this->pending_operation_.h = h;
+  this->enable_loop();
+}
+
+/**
+ * @brief Promotes a queued request to the active operation.
+ *
+ * @return True when a queued request was started, false when nothing was queued.
+ */
+bool EpaperSpectra6133::start_pending_operation_() {
+  if (!this->pending_operation_.has_pending) {
+    return false;
+  }
+  const PendingDisplayOperation p = this->pending_operation_;
+  this->pending_operation_ = {};
+  this->active_operation_ = {};
+  this->active_operation_.type = p.type;
+  this->active_operation_.stage = DisplayOperationStage::INIT;
+  this->active_operation_.state = DisplayOperationState::RUNNING;
+  this->active_operation_.region_x = p.x;
+  this->active_operation_.region_y = p.y;
+  this->active_operation_.region_width = p.w;
+  this->active_operation_.region_height = p.h;
+  this->enable_loop();
+  ESP_LOGD(TAG, "Started pending display operation (type=%d)", static_cast<int>(p.type));
+  return true;
+}
+
 /**
  * @brief Cleans up hardware state after a cancelled operation and clears active_operation_.
  *
@@ -616,37 +674,35 @@ void EpaperSpectra6133::schedule_display_operation_(DisplayOperationType type, i
  * has already been released and any POST_REFRESH_DELAY settle window has elapsed,
  * so sending disable_partial_regions() via SPI is safe.
  *
- * If a pending operation was queued while we were draining a refresh stage, it
- * is started immediately so is_processing() remains true without a gap.
+ * If the panel already completed its refresh cycle, the transferred pixels are
+ * visible on the panel. The change-detection baseline adopts that result even
+ * though the operation itself was cancelled; otherwise the next update would
+ * report the whole frame as changed and fall back to a full-frame refresh.
+ *
+ * If a pending operation is queued (possible when a BUSY timeout tears down the
+ * active operation), it is started immediately so is_processing() remains true
+ * without a gap.
  */
 void EpaperSpectra6133::abort_display_operation_() {
   this->controller_.end_half_transfer();  // safe to call even if CS was already high
-  if (!this->sleeping_) {
+  if (!this->sleeping_ && this->controller_.is_initialized()) {
     this->controller_.disable_partial_regions();  // safe: BUSY has cleared before we reach here
+  }
+  if (this->active_operation_.refresh_completed && this->active_operation_.type != DisplayOperationType::SLEEP) {
+    this->commit_refresh_result_();
   }
   this->active_operation_ = {};
   ESP_LOGD(TAG, "Display operation aborted");
 
   // Start any pending operation that was queued while we were draining a refresh.
-  if (this->pending_operation_.has_pending) {
-    PendingDisplayOperation p = this->pending_operation_;
-    this->pending_operation_ = {};
-    this->active_operation_.type = p.type;
-    this->active_operation_.stage = DisplayOperationStage::INIT;
-    this->active_operation_.state = DisplayOperationState::RUNNING;
-    this->active_operation_.region_x = p.x;
-    this->active_operation_.region_y = p.y;
-    this->active_operation_.region_width = p.w;
-    this->active_operation_.region_height = p.h;
-    ESP_LOGD(TAG, "Started pending display operation (type=%d)", static_cast<int>(p.type));
-  } else {
+  if (!this->start_pending_operation_()) {
     this->disable_loop();
   }
 }
 
 /**
- * @brief Finalises a completed display operation: cleanup, update previous frame (unless SLEEP), reset tracking
- * (unless SLEEP), and clear.
+ * @brief Finalises a completed display operation: cleanup, adopt the refreshed frame as the
+ * new change-detection baseline (unless SLEEP), and start any queued request.
  *
  * For region operations, only the refreshed rectangle is synced into the previous-frame buffer
  * (compare mode) and dirty tracking is cleared only when the refreshed rect fully contains the
@@ -662,20 +718,49 @@ void EpaperSpectra6133::finish_display_operation_() {
     this->controller_.disable_partial_regions();
   }
   if (this->active_operation_.type != DisplayOperationType::SLEEP) {
-    this->update_previous_frame_();
-    if (this->active_operation_.use_full_frame) {
-      this->reset_change_tracking();
-    } else {
-      const UpdateRegion &tr = this->tracked_region_;
-      if (partial_regions_contain_tracked_region(this->active_operation_.regions, this->active_operation_.has_region,
-                                                 tr)) {
-        this->reset_change_tracking();
-      }
-    }
+    this->commit_refresh_result_();
   }
   this->active_operation_ = {};
-  this->disable_loop();
   ESP_LOGD(TAG, "Display operation completed");
+
+  // A request that arrived while this operation owned the panel starts now.
+  if (!this->start_pending_operation_()) {
+    this->disable_loop();
+  }
+}
+
+/**
+ * @brief Adopts the transferred pixels as the new change-detection baseline.
+ *
+ * Only call this once the panel has physically completed its refresh cycle: the
+ * previous-frame buffer and the dirty rectangle then describe what the panel
+ * actually shows.
+ */
+void EpaperSpectra6133::commit_refresh_result_() {
+  this->update_previous_frame_();
+  if (this->active_operation_.use_full_frame) {
+    this->reset_change_tracking();
+    return;
+  }
+  if (partial_regions_contain_tracked_region(this->active_operation_.regions, this->active_operation_.has_region,
+                                             this->tracked_region_)) {
+    this->reset_change_tracking();
+  }
+}
+
+/**
+ * @brief Recovers from a panel that stopped releasing its BUSY line.
+ *
+ * The panel is left in an unknown state, so the controller is marked
+ * uninitialised: the next operation re-runs the hardware reset and the full
+ * register init sequence. Without this the pipeline would keep polling BUSY
+ * forever and silently swallow every later request.
+ */
+void EpaperSpectra6133::handle_panel_timeout_(const char *stage_name) {
+  ESP_LOGE(TAG, "Panel did not release BUSY during %s — re-initializing on next operation", stage_name);
+  this->controller_.reset();
+  this->sleeping_ = false;
+  this->abort_display_operation_();
 }
 
 // ---------------------------------------------------------------------------
@@ -776,6 +861,7 @@ void EpaperSpectra6133::process_display_operation_step_() {
  */
 void EpaperSpectra6133::process_init_stage_() {
   if (this->active_operation_.type == DisplayOperationType::SLEEP) {
+    this->active_operation_.stage_start_us = esp_timer_get_time();
     this->active_operation_.stage = DisplayOperationStage::DEEP_SLEEP;
     return;
   }
@@ -1008,12 +1094,16 @@ void EpaperSpectra6133::process_power_on_stage_() {
     this->abort_display_operation_();
     return;
   }
+  this->active_operation_.stage_start_us = esp_timer_get_time();
   this->active_operation_.stage = DisplayOperationStage::WAIT_POWER_ON;
 }
 
 /** @brief WAIT_POWER_ON: yield each loop() call until BUSY goes high (panel powered on). */
 void EpaperSpectra6133::process_wait_power_on_stage_() {
   if (this->controller_.is_display_busy()) {
+    if ((esp_timer_get_time() - this->active_operation_.stage_start_us) > POWER_BUSY_TIMEOUT_US) {
+      this->handle_panel_timeout_("power-on");
+    }
     return;  // still busy; try again next loop()
   }
   this->active_operation_.stage_start_us = esp_timer_get_time();
@@ -1042,18 +1132,20 @@ void EpaperSpectra6133::process_refresh_screen_stage_() {
 /**
  * @brief WAIT_REFRESH: yield each loop() call until BUSY goes high (panel refreshed).
  *
- * A full e-paper refresh can take up to ~20 s.  The timeout guard here is
- * intentionally generous so normal refresh cycles always complete.  If the
- * panel is unresponsive the operation is aborted to avoid an infinite loop.
+ * A full e-paper refresh on this panel runs for tens of seconds.  The timeout
+ * guard here is intentionally generous so normal refresh cycles always complete.
+ * If the panel is unresponsive the operation is aborted and the controller is
+ * marked uninitialised so the next operation re-runs the hardware init sequence.
  */
 void EpaperSpectra6133::process_wait_refresh_stage_() {
   if (this->controller_.is_display_busy()) {
     if ((esp_timer_get_time() - this->active_operation_.stage_start_us) > REFRESH_BUSY_TIMEOUT_US) {
-      ESP_LOGE(TAG, "Refresh timeout — BUSY never released");
-      this->abort_display_operation_();
+      this->handle_panel_timeout_("display refresh");
     }
     return;  // still busy; try again next loop()
   }
+  // The panel has completed the DRF cycle: the transferred pixels are now visible.
+  this->active_operation_.refresh_completed = true;
   this->active_operation_.stage = DisplayOperationStage::POWER_OFF;
 }
 
@@ -1064,12 +1156,16 @@ void EpaperSpectra6133::process_power_off_stage_() {
     this->abort_display_operation_();
     return;
   }
+  this->active_operation_.stage_start_us = esp_timer_get_time();
   this->active_operation_.stage = DisplayOperationStage::WAIT_POWER_OFF;
 }
 
 /** @brief WAIT_POWER_OFF: yield each loop() call until BUSY goes high (panel powered off). */
 void EpaperSpectra6133::process_wait_power_off_stage_() {
   if (this->controller_.is_display_busy()) {
+    if ((esp_timer_get_time() - this->active_operation_.stage_start_us) > POWER_BUSY_TIMEOUT_US) {
+      this->handle_panel_timeout_("power-off");
+    }
     return;  // still busy; try again next loop()
   }
   this->active_operation_.stage_start_us = esp_timer_get_time();
@@ -1085,6 +1181,9 @@ void EpaperSpectra6133::process_wait_power_off_stage_() {
  */
 void EpaperSpectra6133::process_deep_sleep_stage_() {
   if (this->controller_.is_display_busy()) {
+    if ((esp_timer_get_time() - this->active_operation_.stage_start_us) > POWER_BUSY_TIMEOUT_US) {
+      this->handle_panel_timeout_("deep sleep");
+    }
     return;
   }
 

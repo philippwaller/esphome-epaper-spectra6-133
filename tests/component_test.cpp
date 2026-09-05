@@ -340,7 +340,7 @@ TEST_F(EpaperSpectra6133ComponentTest, CancelDuringRefreshStageWaitsForBusy) {
 
 // ---------------------------------------------------------------------------
 // 12. Scheduling a new operation while an existing operation is in a refresh stage
-//     queues it as pending and keeps is_processing() true.
+//     queues it as pending without interrupting the running operation.
 // ---------------------------------------------------------------------------
 TEST_F(EpaperSpectra6133ComponentTest, ScheduleDuringRefreshStageQueuesPendingOperation) {
   display_.refresh();
@@ -356,9 +356,9 @@ TEST_F(EpaperSpectra6133ComponentTest, ScheduleDuringRefreshStageQueuesPendingOp
   // Schedule a replacement operation.
   display_.refresh_region(0, 0, 100, 200);
 
-  // The old operation must be marked CANCELLING (not immediately aborted).
-  EXPECT_TRUE(operation_cancelled());
-  // A pending operation must have been stored.
+  // The running operation must keep going; the request is queued behind it.
+  EXPECT_FALSE(operation_cancelled());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH);
   EXPECT_TRUE(pending_has_pending());
   EXPECT_EQ(pending_type(), DisplayOperationType::REFRESH_REGION);
   // is_processing() must still be true (pending operation counts as processing).
@@ -366,10 +366,10 @@ TEST_F(EpaperSpectra6133ComponentTest, ScheduleDuringRefreshStageQueuesPendingOp
 }
 
 // ---------------------------------------------------------------------------
-// 13. After a pending operation is queued, it auto-starts once BUSY clears and
-//     the draining operation is torn down.
+// 13. After a pending operation is queued, it auto-starts once the running
+//     operation has completed its full sequence (including power-off and sleep).
 // ---------------------------------------------------------------------------
-TEST_F(EpaperSpectra6133ComponentTest, PendingOperationStartsAfterRefreshDrains) {
+TEST_F(EpaperSpectra6133ComponentTest, PendingOperationStartsAfterActiveOperationCompletes) {
   display_.refresh();
 
   // Advance until in a refresh stage with BUSY asserted.
@@ -384,9 +384,13 @@ TEST_F(EpaperSpectra6133ComponentTest, PendingOperationStartsAfterRefreshDrains)
   display_.refresh_region(10, 20, 300, 400);
   EXPECT_TRUE(pending_has_pending());
 
-  // Release BUSY; the next loop() should drain the old operation AND start pending.
+  // Release BUSY; the running refresh completes normally and starts the pending
+  // operation from its finalisation stage.
   set_display_busy(false);
-  display_.loop();
+  for (int i = 0; i < 2000 && pending_has_pending(); i++) {
+    g_mock_timer_us += 1000000LL;
+    display_.loop();
+  }
 
   // The pending operation should now be the active operation.
   EXPECT_FALSE(pending_has_pending());
@@ -410,16 +414,18 @@ TEST_F(EpaperSpectra6133ComponentTest, PendingOperationWaitsForPostRefreshDelay)
   ASSERT_EQ(operation_stage(), DisplayOperationStage::POST_REFRESH_DELAY);
 
   display_.refresh_region(10, 20, 300, 400);
-  EXPECT_TRUE(operation_cancelled());
+  EXPECT_FALSE(operation_cancelled());
   EXPECT_TRUE(pending_has_pending());
 
   // The replacement must wait for the settle window even though BUSY is already high.
   g_mock_timer_us += 9000LL;
   display_.loop();
-  EXPECT_TRUE(operation_cancelled());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH);
   EXPECT_TRUE(pending_has_pending());
 
+  // Settle window elapses -> FINISHING -> pending starts.
   g_mock_timer_us += 1000LL;
+  display_.loop();
   display_.loop();
   EXPECT_FALSE(pending_has_pending());
   EXPECT_TRUE(display_.is_processing());
@@ -438,11 +444,12 @@ TEST_F(EpaperSpectra6133ComponentTest, PendingOperationStartsAfterAutoSleepPostR
   ASSERT_EQ(operation_stage(), DisplayOperationStage::POST_REFRESH_DELAY);
 
   display_.refresh_region(10, 20, 300, 400);
-  EXPECT_TRUE(operation_cancelled());
+  EXPECT_FALSE(operation_cancelled());
   EXPECT_TRUE(pending_has_pending());
   EXPECT_EQ(pending_type(), DisplayOperationType::REFRESH_REGION);
 
   g_mock_timer_us += 10000LL;
+  display_.loop();
   display_.loop();
   EXPECT_FALSE(pending_has_pending());
   EXPECT_TRUE(display_.is_processing());
@@ -454,7 +461,8 @@ TEST_F(EpaperSpectra6133ComponentTest, PendingOperationStartsAfterAutoSleepPostR
 }
 
 // ---------------------------------------------------------------------------
-// 14. cancel() while a pending operation exists discards the pending operation.
+// 14. cancel() while a pending operation exists discards the pending operation
+//     and marks the active operation as cancelling.
 // ---------------------------------------------------------------------------
 TEST_F(EpaperSpectra6133ComponentTest, CancelDiscardsPendingOperation) {
   display_.refresh();
@@ -470,11 +478,118 @@ TEST_F(EpaperSpectra6133ComponentTest, CancelDiscardsPendingOperation) {
   // Explicit cancel clears both the active operation AND the pending operation.
   display_.cancel();
   EXPECT_FALSE(pending_has_pending());
+  EXPECT_TRUE(operation_cancelled());
 
   // After BUSY clears, the abort runs and nothing new starts.
   set_display_busy(false);
   display_.loop();
   EXPECT_FALSE(display_.is_processing());
+}
+
+// ---------------------------------------------------------------------------
+// 14b. A request that arrives after the pixel transfer has started is queued
+//      instead of restarting the running operation.  Restarting here would let a
+//      caller that refreshes on a fixed interval starve the pipeline forever.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, RequestDuringTransferIsQueuedInsteadOfRestarting) {
+  display_.refresh();
+  display_.loop();  // leave INIT and start streaming pixel rows
+  ASSERT_EQ(operation_stage(), DisplayOperationStage::TRANSFER_LEFT_HALF);
+
+  display_.refresh_region(10, 20, 300, 400);
+
+  EXPECT_FALSE(operation_cancelled());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH);
+  EXPECT_EQ(operation_stage(), DisplayOperationStage::TRANSFER_LEFT_HALF);
+  EXPECT_TRUE(pending_has_pending());
+  EXPECT_EQ(pending_type(), DisplayOperationType::REFRESH_REGION);
+}
+
+// ---------------------------------------------------------------------------
+// 14c. A queued request starts once the active operation completes normally.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, QueuedRequestRunsAfterActiveOperationCompletes) {
+  reset_transport_state();
+
+  display_.refresh();
+  display_.loop();
+  ASSERT_NE(operation_stage(), DisplayOperationStage::INIT);
+
+  display_.refresh_region(10, 20, 300, 400);
+  ASSERT_TRUE(pending_has_pending());
+
+  run_loop_until_done();
+
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_FALSE(pending_has_pending());
+  // Both the full refresh and the queued region refresh reached the panel.
+  EXPECT_EQ(count_register_writes(transport_state().operations, DRF), 2U);
+}
+
+// ---------------------------------------------------------------------------
+// 14d. Cancelling after the panel has finished its refresh keeps the compare
+//      baseline: the pixels are on the panel, so the next update must not fall
+//      back to a full-frame refresh.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, CancelAfterCompletedRefreshEstablishesBaseline) {
+  set_change_detection_mode(ChangeDetectionMode::COMPARE);
+  std::memset(buffer(), 0x12, FULL_FRAME_SIZE);
+  display_.set_auto_sleep(false);
+
+  display_.refresh();
+  for (int i = 0; i < 50000 && operation_stage() != DisplayOperationStage::POST_REFRESH_DELAY; i++) {
+    g_mock_timer_us += 1000LL;
+    display_.loop();
+  }
+  ASSERT_EQ(operation_stage(), DisplayOperationStage::POST_REFRESH_DELAY);
+
+  display_.cancel();
+  g_mock_timer_us += 1000000LL;
+  display_.loop();
+
+  EXPECT_FALSE(display_.is_processing());
+  ASSERT_TRUE(has_previous_frame_buffer());
+  EXPECT_TRUE(previous_frame_matches_buffer(0, FULL_FRAME_SIZE));
+  EXPECT_TRUE(detect_changed_region().empty());
+}
+
+// ---------------------------------------------------------------------------
+// 14e. A panel that never releases BUSY during power-on must not hang the
+//      pipeline; the operation is torn down and the panel is re-initialized.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, PowerOnBusyTimeoutTearsDownOperation) {
+  display_.refresh();
+  set_display_busy(true);
+
+  for (int i = 0; i < 50000 && display_.is_processing(); i++) {
+    g_mock_timer_us += 1000000LL;  // +1 s
+    display_.loop();
+  }
+
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_FALSE(display_.is_ready());
+}
+
+// ---------------------------------------------------------------------------
+// 14f. Draining a cancelled operation must also give up if BUSY never clears.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, CancelDrainTimesOutWhenBusyNeverClears) {
+  display_.refresh();
+
+  set_display_busy(true);
+  for (int i = 0; i < 2000 && !is_in_hw_refresh_stage(); i++) {
+    display_.loop();
+  }
+  ASSERT_TRUE(is_in_hw_refresh_stage());
+
+  display_.cancel();
+  for (int i = 0; i < 100 && display_.is_processing(); i++) {
+    g_mock_timer_us += 1000000LL;  // +1 s
+    display_.loop();
+  }
+
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_FALSE(display_.is_ready());
 }
 
 // ---------------------------------------------------------------------------
@@ -603,19 +718,17 @@ TEST_F(EpaperSpectra6133ComponentTest, SleepDuringRefreshStageWaitsForBusyBefore
 
   display_.sleep();
 
-  EXPECT_TRUE(operation_cancelled());
+  EXPECT_FALSE(operation_cancelled());
   EXPECT_TRUE(pending_has_pending());
   EXPECT_EQ(pending_type(), DisplayOperationType::SLEEP);
 
   display_.loop();
   EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_type(), DisplayOperationType::REFRESH);
 
   set_display_busy(false);
-  display_.loop();
-  EXPECT_TRUE(display_.is_processing());
-  EXPECT_EQ(operation_type(), DisplayOperationType::SLEEP);
-
   run_loop_until_done();
+  EXPECT_FALSE(display_.is_processing());
   EXPECT_TRUE(display_.is_sleeping());
 }
 

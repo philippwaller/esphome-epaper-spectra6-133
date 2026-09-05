@@ -518,7 +518,7 @@ Display calls such as `update()`, `update_region()`, `refresh()`, and `refresh_r
 
 This matters because a Spectra 6 refresh can take several seconds. During that time ESPHome continues to handle WiFi, API traffic, sensors, and automations.
 
-Only one display operation can be active at a time. A new request replaces the previous one — but if the panel is mid-refresh (BUSY pin active), the new request waits in a queue until the refresh finishes safely. `is_processing()` returns `true` as long as the display is busy, including while a queued request is waiting its turn.
+Only one display operation can be active at a time. A request that arrives before the driver has sent anything to the panel replaces the pending one. Once the transfer or the physical refresh has started, the new request waits in a queue and runs as soon as the active operation finishes, so an in-flight refresh is never thrown away. Only the most recent queued request is kept, and `is_processing()` returns `true` as long as the display is busy, including while a queued request is waiting its turn.
 
 > [!TIP]
 > Use `is_processing()` to find out whether the display is done. It covers both active refreshes and queued requests waiting behind one.

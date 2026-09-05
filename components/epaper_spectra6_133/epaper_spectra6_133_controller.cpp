@@ -211,7 +211,7 @@ bool Controller::refresh() {
   if (!this->send_refresh_drf()) {
     return false;
   }
-  if (!this->transport_.wait_busy_high(20000)) {
+  if (!this->transport_.wait_busy_high(40000)) {
     return false;
   }
   if (!this->send_refresh_pof()) {

@@ -123,7 +123,7 @@ TEST_F(ControllerTest, RefreshSendsPonDrfPofSequence) {
   EXPECT_EQ(write_commands[0].command, PON);
 
   EXPECT_EQ(write_register_commands(state().operations), (std::vector<uint8_t>{DRF, POF}));
-  EXPECT_EQ(wait_timeouts(state().operations), (std::vector<uint32_t>{8000U, 20000U, 8000U}));
+  EXPECT_EQ(wait_timeouts(state().operations), (std::vector<uint32_t>{8000U, 40000U, 8000U}));
   EXPECT_EQ(delays(state().operations), (std::vector<uint32_t>{30U}));
 }
 
