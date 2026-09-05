@@ -221,9 +221,13 @@ void EpaperSpectra6133::update() {
  * Converts @p color to the closest 4-bit EPD nibble value and writes the
  * packed byte across every byte of the framebuffer.  Does not trigger a
  * panel refresh; the next update() or transfer_full_frame() call will
- * push the result to the display.
+ * push the result to the display. The whole framebuffer is marked as changed
+ * for partial-refresh tracking.
  */
-void EpaperSpectra6133::fill(Color color) { fill_buffer_with_code(this->buffer_, color_to_code(color)); }
+void EpaperSpectra6133::fill(Color color) {
+  fill_buffer_with_code(this->buffer_, color_to_code(color));
+  this->tracked_region_ = {0, 0, EPD_WIDTH, EPD_HEIGHT};
+}
 
 /**
  * @brief Performs the full hardware initialization sequence: GPIO → SPI → EPD.
@@ -256,7 +260,10 @@ bool EpaperSpectra6133::initialize() {
   return true;
 }
 
-void EpaperSpectra6133::clear() { fill_buffer_with_code(this->buffer_, color_to_code(this->clear_color_)); }
+void EpaperSpectra6133::clear() {
+  fill_buffer_with_code(this->buffer_, color_to_code(this->clear_color_));
+  this->tracked_region_ = {0, 0, EPD_WIDTH, EPD_HEIGHT};
+}
 
 /**
  * @brief Schedules a partial update of a logical rectangle and returns immediately.

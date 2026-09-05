@@ -268,12 +268,12 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   void update() override;
   /** @brief Progresses any active display operation by one bounded step. */
   void loop() override;
-  /** @brief Fills the logical framebuffer with one ESPHome color without refreshing immediately. */
+  /** @brief Fills the logical framebuffer, marks it changed, and does not refresh immediately. */
   void fill(Color color) override;
   /** @brief Reports that this display exposes a multi-colour output surface. */
   display::DisplayType get_display_type() override { return display::DISPLAY_TYPE_COLOR; }
 
-  /** @brief Fills the framebuffer with the configured clear colour without refreshing. */
+  /** @brief Fills the framebuffer with the configured clear colour, marks it changed, and does not refresh. */
   void clear() override;
 
   /**
