@@ -632,6 +632,42 @@ TEST_F(EpaperSpectra6133ComponentTest, ClearFillsBufferWithoutRefresh) {
   EXPECT_TRUE(buffer_is_filled_with(COLOR_WHITE));
 }
 
+TEST_F(EpaperSpectra6133ComponentTest, FillMarksWholeFrameChangedInTrackMode) {
+  set_change_detection_mode(ChangeDetectionMode::TRACK);
+
+  display_.fill(EpaperSpectra6133::BLACK);
+
+  const UpdateRegion changed = detect_changed_region();
+  EXPECT_EQ(changed.x, 0);
+  EXPECT_EQ(changed.y, 0);
+  EXPECT_EQ(changed.width, EPD_WIDTH);
+  EXPECT_EQ(changed.height, EPD_HEIGHT);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, ClearMarksWholeFrameChangedInTrackMode) {
+  set_change_detection_mode(ChangeDetectionMode::TRACK);
+
+  display_.clear();
+
+  const UpdateRegion changed = detect_changed_region();
+  EXPECT_EQ(changed.x, 0);
+  EXPECT_EQ(changed.y, 0);
+  EXPECT_EQ(changed.width, EPD_WIDTH);
+  EXPECT_EQ(changed.height, EPD_HEIGHT);
+}
+
+TEST_F(EpaperSpectra6133ComponentTest, AutomaticClearUsesFullFrameTransferInPartialTrackMode) {
+  set_change_detection_mode(ChangeDetectionMode::TRACK);
+  display_.set_refresh_mode(RefreshMode::PARTIAL);
+  display_.set_auto_clear_enabled(true);
+
+  display_.update();
+  display_.loop();
+
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_stage(), DisplayOperationStage::TRANSFER_LEFT_HALF);
+}
+
 // Dispatch through the base DisplayBuffer API to verify the display's white
 // default clear colour is preserved by the override.
 TEST_F(EpaperSpectra6133ComponentTest, BaseClassClearDispatchUsesWhiteWithoutRefresh) {

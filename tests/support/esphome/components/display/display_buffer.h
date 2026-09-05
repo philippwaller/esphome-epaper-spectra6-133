@@ -42,6 +42,8 @@ class DisplayBuffer {
   virtual DisplayType get_display_type() { return DISPLAY_TYPE_COLOR; }
   virtual void fill(Color) {}
   virtual void clear() {}
+  /** @brief Enables ESPHome's automatic pre-render clear for a host test. */
+  void set_auto_clear_enabled(bool auto_clear_enabled) { this->auto_clear_enabled_ = auto_clear_enabled; }
 
   // ---- Internal framebuffer management ----
   uint8_t *buffer_{nullptr};
@@ -54,8 +56,16 @@ class DisplayBuffer {
     }
   }
 
-  // Called by update() to invoke the display lambda.  No-op in tests.
-  void do_update_() {}
+  /**
+   * @brief Runs ESPHome's automatic pre-render clear when enabled.
+   *
+   * Display writers are outside the scope of these host tests.
+   */
+  void do_update_() {
+    if (this->auto_clear_enabled_) {
+      this->clear();
+    }
+  }
 
   // ---- ESPHome Component failure state ----
   void mark_failed(const char * /*reason*/ = nullptr) { this->failed_ = true; }
@@ -67,6 +77,7 @@ class DisplayBuffer {
   virtual void draw_absolute_pixel_internal(int x, int y, Color color) = 0;
 
  private:
+  bool auto_clear_enabled_{false};
   bool failed_{false};
 };
 
