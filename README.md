@@ -309,7 +309,7 @@ Use this local form only when the package file is present next to your ESPHome Y
 | `reset_pin` | pin | *required* | Hardware reset |
 | `power_pin` | pin | *required* | Controls the power supply to the panel |
 | `refresh_mode` | string | `full` | Whether `update()` transfers the full frame (`full`) or only the detected changed region (`partial`) |
-| `change_detection_mode` | string | `track` | How to detect changed pixels: `track` (pixel-write accumulator) or `compare` (frame comparison, requires an additional 960 KB of PSRAM) |
+| `change_detection_mode` | string | `track` | How to detect changed pixels: `track` (pixel-write accumulator) or `compare` (frame comparison, requires up to an additional 1.92 MB of PSRAM during a refresh) |
 | `auto_sleep` | bool | `true` | Send the panel deep-sleep command after each successful refresh |
 | `power_off_after_sleep` | bool | `false` | Also switch `power_pin` low after the panel has entered deep sleep |
 | `update_interval` | time | `never` | How often to re-render the display. Use `never` to update only on demand. Accepts values like `30s`, `5min`, `1h`. |
@@ -458,7 +458,7 @@ When partial mode is enabled, the driver needs to know which pixels changed. Thi
 | Mode | Memory cost | How it works | Use when |
 |------|-------------|--------------|----------|
 | `track` | No additional memory | Tracks pixel writes through the drawing pipeline and accumulates a bounding box | You deliberately draw only the areas that changed |
-| `compare` | ~960 KB PSRAM | Compares the current framebuffer with the last successfully displayed frame | You render full screens or images and want exact bounds automatically |
+| `compare` | ~1.92 MB peak PSRAM | Compares the current framebuffer with the last successfully displayed frame | You render full screens or images and want exact bounds automatically |
 
 #### Track mode
 
@@ -505,7 +505,7 @@ display:
 ```
 
 > [!NOTE]
-> The comparison buffer is allocated lazily on first refresh. Make sure your board has enough PSRAM before using this mode.
+> The comparison buffer is allocated lazily on first refresh. Each refresh temporarily allocates a second 960 KB snapshot so changes drawn while the panel is busy remain pending. Compare mode therefore peaks at about 1.92 MB of additional PSRAM, on top of the 960 KB display framebuffer.
 
 ### 6. Work with the display outside the lambda
 
