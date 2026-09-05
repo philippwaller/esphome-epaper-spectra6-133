@@ -262,6 +262,7 @@ bool EpaperSpectra6133::initialize() {
 
 void EpaperSpectra6133::clear() {
   fill_buffer_with_code(this->buffer_, color_to_code(this->clear_color_));
+  // Bulk clear bypasses per-pixel tracking, so the next partial refresh must cover the full frame.
   this->tracked_region_ = {0, 0, EPD_WIDTH, EPD_HEIGHT};
 }
 
