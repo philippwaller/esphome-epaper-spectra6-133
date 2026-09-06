@@ -128,7 +128,7 @@ time:
             format: "SNTP synced: %s (uptime %u s)"
             args:
               - id(sntp_time).now().strftime("%H:%M:%S").c_str()
-              - millis() / 1000
+              - static_cast<unsigned>(millis() / 1000)
         - globals.set:
             id: time_synced_once
             value: 'true'

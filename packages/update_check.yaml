@@ -6,6 +6,15 @@
 
 http_request:
 
+logger:
+  logs:
+    epaper_update_check: INFO
+
+wifi:
+  on_connect:
+    - delay: 1s
+    - script.execute: epaper_spectra6_133_check_for_updates
+
 text_sensor:
   - platform: template
     name: "Component Version"
@@ -34,33 +43,68 @@ binary_sensor:
       if (sscanf(current.c_str(), "%d.%d.%d", &cmaj, &cmin, &cpat) != 3) return false;
       return lmaj > cmaj || (lmaj == cmaj && (lmin > cmin || (lmin == cmin && lpat > cpat)));
 
+button:
+  - platform: template
+    name: "Check for Updates"
+    entity_category: diagnostic
+    on_press:
+      - script.execute: epaper_spectra6_133_check_for_updates
+
 script:
   - id: epaper_spectra6_133_check_for_updates
+    mode: single
     then:
-      - http_request.get:
-          capture_response: true
-          url: https://api.github.com/repos/philippwaller/esphome-epaper-spectra6-133/releases/latest
-          on_response:
-            - if:
-                condition:
-                  lambda: 'return response->status_code == 200;'
-                then:
-                  - lambda: |-
-                      json::parse_json(body, [](JsonObject root) -> bool {
-                        std::string tag = root["tag_name"] | "";
-                        if (!tag.empty() && tag[0] == 'v') tag = tag.substr(1);
-                        if (!tag.empty()) id(epaper_spectra6_133_latest_version).publish_state(tag);
-                        return true;
-                      });
-
-esphome:
-  on_boot:
-    priority: -100
-    then:
-      - delay: 30s
-      - script.execute: epaper_spectra6_133_check_for_updates
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - component.update: epaper_spectra6_133_current_version
+            - logger.log:
+                level: INFO
+                tag: epaper_update_check
+                format: "Checking for component updates"
+            - http_request.get:
+                capture_response: true
+                max_response_buffer_size: 32768
+                url: https://api.github.com/repos/philippwaller/esphome-epaper-spectra6-133/releases/latest
+                on_response:
+                  - if:
+                      condition:
+                        lambda: 'return response->status_code == 200;'
+                      then:
+                        - lambda: |-
+                            bool parsed = json::parse_json(body, [](JsonObject root) -> bool {
+                              std::string tag = root["tag_name"] | "";
+                              if (!tag.empty() && tag[0] == 'v') tag = tag.substr(1);
+                              if (tag.empty()) return false;
+                              id(epaper_spectra6_133_latest_version).publish_state(tag);
+                              ESP_LOGI("epaper_update_check", "Update check completed: installed=%s, latest=%s",
+                                       id(epaper_spectra6_133_current_version).state.c_str(), tag.c_str());
+                              return true;
+                            });
+                            if (!parsed) {
+                              ESP_LOGW("epaper_update_check", "Update check failed: could not parse version from response");
+                            }
+                      else:
+                        - logger.log:
+                            level: WARN
+                            tag: epaper_update_check
+                            format: "Update check failed: HTTP status %d"
+                            args:
+                              - 'response->status_code'
+                on_error:
+                  - logger.log:
+                      level: WARN
+                      tag: epaper_update_check
+                      format: "Update check failed: HTTP request error"
+          else:
+            - logger.log:
+                level: INFO
+                tag: epaper_update_check
+                format: "Update check skipped: WiFi is not connected"
 
 interval:
   - interval: 6h
+    startup_delay: 6h
     then:
       - script.execute: epaper_spectra6_133_check_for_updates
