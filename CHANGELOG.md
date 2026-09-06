@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.5.0](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.4.0...v0.5.0) (2026-09-06)
+
+
+### 🚀 Features
+
+* Add board definition for Good Display ESP32-133C02 revision 2 ([#75](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/75)) ([1626c76](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/1626c76dd78e70873e0477fee1c5563d5bef6424))
+* Add board definition for Seed Studio XIAO EE02 ([#80](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/80)) ([4716f59](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/4716f59986ab7d29930a6d3a4bcbc2da85929758))
+* Confirm Seeed Studio T133A01 support ([#95](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/95)) ([88ca5d8](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/88ca5d84708a0b7f1b649919a6b91e07b7813785))
+
+
+### 🐛 Bug Fixes
+
+* **controller:** Propagate partial cleanup failures ([#102](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/102)) ([1d46db5](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/1d46db5c3e6081e53b8e3c301fd9b8bec74608fb))
+* **display:** Keep partial refresh flow stable under periodic updates ([#98](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/98)) ([537c36f](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/537c36fd1bf7e723160a7772f7af7a183d39f4a6))
+* **display:** Preserve change tracking and previous-frame baseline across sleep() ([#89](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/89)) ([6b9ce2d](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/6b9ce2dd394fa09358b393327d432f605c35447a))
+* **display:** Preserve changes drawn during refresh ([#100](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/100)) ([ee8b7a2](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/ee8b7a2d8087ff54dcad6de5ea8ad7e8317bfdf3))
+* **display:** Preserve pending tracked changes during update ([#101](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/101)) ([c4f9d4c](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/c4f9d4cb393bcd4a1b4ee3e4d21d057b82c35177))
+* **display:** Track bulk framebuffer changes ([#99](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/99)) ([2c32122](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/2c321225057d2624fc199e3a4a0128a2c5200ceb))
+* **display:** Treat panel content as unknown until compare-mode baseline exists ([#90](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/90)) ([dc7d69e](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/dc7d69e4f2bc4875e4cfa0b521558cabe7097b25))
+
+
+### 🔧 Maintenance
+
+* **deps:** Update actions/checkout digest to 3d3c42e ([#78](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/78)) ([c29619b](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/c29619b75e5f5adb5a8cce9bedf4e284ba0f80a2))
+* **deps:** Update actions/setup-python action to v7 ([#83](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/83)) ([c8ffe2d](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/c8ffe2db6b745a5ab05138d243672ed41a9f45fc))
+* **deps:** Update codspeedhq/action action to v5 ([#84](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/84)) ([50cebf8](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/50cebf899faa12a280c1937e1c86fe99c76003ed))
+* **deps:** Update codspeedhq/action digest to f22792b ([#79](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/79)) ([3952cbe](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/3952cbe034458dd5fab01d4b48ebac8984205286))
+* **deps:** Update dorny/paths-filter digest to ceb8a2b ([#86](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/86)) ([d0046a7](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/d0046a7ad4a45aac5ced90afd7ed97ab6796eed6))
+* **deps:** Update pre-commit hook astral-sh/ruff-pre-commit to v0.16.6 ([#88](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/88)) ([0a9620b](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/0a9620b2ec70c6250d2d6f0f845baad4fb77a787))
+* **deps:** Update pre-commit hook davidanson/markdownlint-cli2 to v0.23.0 ([#76](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/76)) ([b601838](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/b601838715da273971c813f4fce7a0e04ec2d148))
+* **deps:** Update pre-commit hook davidanson/markdownlint-cli2 to v0.23.2 ([#87](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/87)) ([c643ac5](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/c643ac5f585060c8c53644672f8f80546324044a))
+* **deps:** Update pre-commit hook pre-commit/mirrors-clang-format to v23 ([#85](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/85)) ([80d1911](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/80d191124fdef11075ba0a6448a73b332b4e0673))
+* **deps:** Update python development dependencies (non-major) ([#82](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/82)) ([ec65321](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/ec6532103f223571be199c9b1c7f5764cc66b290))
+* **release:** Use minor bumps for pre-1.0 features ([#96](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/96)) ([d7c7d4c](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/d7c7d4c37a1a71f5cf3a182e21c40d19311cca0f))
+* **renovate:** Group related dependency updates ([#81](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/81)) ([b107d71](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/b107d715648008b2988002c24a547f9544946efa))
+
+
+### 📖 Documentation
+
+* **readme:** Clarify differences to native epaper_spi support ([#97](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/97)) ([ecd1815](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/ecd181515ba6194cb82765745fc223ff4a657261))
+* Register board guide for release updates ([#93](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/93)) ([798dfa2](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/798dfa2e9fcfef4ffa462a5fe525e89b159fcbcb))
+
 ## [0.4.0](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.3.0...v0.4.0) (2026-06-30)
 
 
