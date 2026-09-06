@@ -132,7 +132,7 @@ Use the package matching the physical revision.
 <!-- x-release-please-start-version -->
 ```yaml
 packages:
-  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/good_display/esp32_133c02.yaml@v0.4.0
+  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/good_display/esp32_133c02.yaml@v0.5.0
 ```
 <!-- x-release-please-end -->
 
@@ -141,7 +141,7 @@ packages:
 <!-- x-release-please-start-version -->
 ```yaml
 packages:
-  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/good_display/esp32_133c02_ref2.yaml@v0.4.0
+  board: github://philippwaller/esphome-epaper-spectra6-133/packages/boards/good_display/esp32_133c02_ref2.yaml@v0.5.0
 ```
 <!-- x-release-please-end -->
 
