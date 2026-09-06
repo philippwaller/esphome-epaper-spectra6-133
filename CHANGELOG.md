@@ -12,7 +12,7 @@ Community contributions also expanded the tested Seeed Studio lineup. Many thank
 
 Support for this display family is growing beyond this project: since ESPHome 2026.7.0, a native T133A01 driver is available through the [`epaper_spi`](https://esphome.io/components/display/epaper_spi/) platform for the Seeed reTerminal E1004. This is great news for the ecosystem, and the native integration is my recommended starting point whenever it covers your use case.
 
-For projects that need more control, this component continues to provide additional capabilities such as automatic partial-region refreshes, display actions for automation-driven drawing and refresh control and explicit panel power management
+For projects that need more control, this component continues to provide additional capabilities such as automatic partial-region refreshes, display actions for automation-driven drawing and refresh control and explicit panel power management.
 
 ### 🚀 Features
 
