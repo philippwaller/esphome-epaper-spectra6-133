@@ -157,6 +157,20 @@ TEST_F(ControllerTest, TransferRegionAlignsSingleHalfAndArmsDummyRegionOnOtherHa
   EXPECT_EQ(App.feed_wdt_calls, 1);
 }
 
+TEST_F(ControllerTest, TransferRegionFailsAndResetsControllerWhenDisablingPartialRegionsFails) {
+  const auto framebuffer = make_framebuffer_pattern();
+  ASSERT_TRUE(controller_.init_panel());
+  test_support::reset_transport_state(transport_);
+
+  for (int write = 0; write < 6; write++) {
+    state().write_register_results.push_back(ESP_OK);
+  }
+  state().write_register_results.push_back(ESP_FAIL);
+
+  EXPECT_FALSE(controller_.transfer_region(framebuffer.data(), 10, 5, 6, 3));
+  EXPECT_FALSE(controller_.is_initialized());
+}
+
 TEST_F(ControllerTest, TransferRegionReturnsFalseForRectanglesOutsidePanel) {
   const auto framebuffer = make_framebuffer_pattern();
 
