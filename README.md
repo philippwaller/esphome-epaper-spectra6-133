@@ -688,15 +688,17 @@ The version is also logged during startup in the `dump_config()` output.
 
 ### 12. Check for component updates
 
-This repository includes an optional package that periodically queries the latest GitHub release and compares it against the installed version. It exposes three Home Assistant diagnostic entities:
+This repository includes an optional package that periodically queries the latest GitHub release and compares it against the installed version. It exposes four Home Assistant diagnostic entities:
 
 | Entity | Type | Description |
 |--------|------|-------------|
 | Component Version | text_sensor | Currently installed version |
 | Latest Version | text_sensor | Most recent release on GitHub |
 | Update Available | binary_sensor | `true` when a newer release exists |
+| Check for Updates | button | Runs the update check immediately |
 
-The check runs every 6 hours and requires no additional configuration beyond including the package.
+The check runs when WiFi connects and every 6 hours afterward. It requires no additional configuration beyond including the package, but it does assume WiFi — for Ethernet-only setups, replace the `wifi.on_connect` trigger and the `wifi.connected` condition with their `ethernet` counterparts.
+Progress and failures are logged under the `epaper_update_check` tag, with informational messages enabled by default.
 
 Add the package to your configuration:
 

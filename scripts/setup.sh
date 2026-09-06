@@ -139,9 +139,9 @@ EOF
       return 1
     fi
 
-    "${VENV_PYTHON}" -m pip install -r "${REQUIREMENTS_DEV}" "esphome==${ESPHOME_VERSION}"
+    "${VENV_PYTHON}" -m pip install --upgrade --upgrade-strategy eager -r "${REQUIREMENTS_DEV}" "esphome==${ESPHOME_VERSION}"
   else
-    "${VENV_PYTHON}" -m pip install -r "${REQUIREMENTS_DEV}"
+    "${VENV_PYTHON}" -m pip install --upgrade --upgrade-strategy eager -r "${REQUIREMENTS_DEV}"
   fi
 }
 
