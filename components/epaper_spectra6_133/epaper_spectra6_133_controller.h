@@ -146,8 +146,9 @@ class Controller {
   bool is_display_busy() const;
 
   /** @brief Clears partial-region state so later transfers start from full-screen defaults.
+   *  Returns false and clears the initialised flag if the PTLW write fails.
    *  Made public so the FINISHING stage can call it after region operations. */
-  void disable_partial_regions();
+  bool disable_partial_regions();
 
  private:
   /** @brief Programs the PTLW registers for one already aligned controller region. */

@@ -372,8 +372,7 @@ bool Controller::transfer_region(const uint8_t *framebuffer, int x, int y, int w
   }
 
   this->transport_.delay_ms(300);
-  this->disable_partial_regions();  // clear PTLW state for next operation
-  return true;
+  return this->disable_partial_regions();  // clear PTLW state for next operation
 }
 
 /**
@@ -626,11 +625,16 @@ bool Controller::send_deep_sleep() {
 bool Controller::is_display_busy() const { return this->transport_.busy_level() == 0; }
 
 /** @brief Disables any previously programmed partial-region mode on both halves. */
-void Controller::disable_partial_regions() {
+bool Controller::disable_partial_regions() {
   const uint8_t partial_region_data[9] = {0, 0, 0, 0, 0, 0, 0, 0, PTLW_DISABLE};
   this->transport_.set_cs_all(0);
-  (void) this->transport_.write_register(PTLW, partial_region_data, sizeof(partial_region_data));
+  const bool success =
+      this->transport_.write_register(PTLW, partial_region_data, sizeof(partial_region_data)) == ESP_OK;
   this->transport_.set_cs_all(1);
+  if (!success) {
+    this->reset();
+  }
+  return success;
 }
 
 /**
