@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.5.0...v0.5.1) (2026-09-06)
+
+
+### ♻️ Refactoring
+
+* **update-check:** Improve reliability and observability ([#103](https://github.com/philippwaller/esphome-epaper-spectra6-133/issues/103)) ([e5df8e0](https://github.com/philippwaller/esphome-epaper-spectra6-133/commit/e5df8e0b6e98146c15757c6e1591db188a1e1633))
+
 ## [0.5.0](https://github.com/philippwaller/esphome-epaper-spectra6-133/compare/v0.4.0...v0.5.0) (2026-09-06)
 
 ### More hardware options
