@@ -913,11 +913,8 @@ void EpaperSpectra6133::process_init_stage_() {
                              this->active_operation_.type == DisplayOperationType::UPDATE_REGION);
 
   if (needs_lambda) {
-    // In track mode, reset the accumulator before running the lambda so we
-    // capture only the pixels drawn during this update cycle.
-    if (this->change_detection_mode_ == ChangeDetectionMode::TRACK) {
-      this->reset_change_tracking();
-    }
+    // Keep changes that a previous region refresh did not transfer. Drawing
+    // during the lambda extends the existing tracked region as needed.
     this->do_update_();
   }
 

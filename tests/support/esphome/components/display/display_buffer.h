@@ -1,5 +1,8 @@
 #pragma once
 
+#include <functional>
+#include <utility>
+
 /**
  * @file display_buffer.h
  * @brief Minimal host-test stub for esphome::display::DisplayBuffer.
@@ -58,14 +61,17 @@ class DisplayBuffer {
 
   /**
    * @brief Runs ESPHome's automatic pre-render clear when enabled.
-   *
-   * Display writers are outside the scope of these host tests.
    */
   void do_update_() {
     if (this->auto_clear_enabled_) {
       this->clear();
     }
+    if (this->update_callback_) {
+      this->update_callback_();
+    }
   }
+
+  void set_update_callback(std::function<void()> callback) { this->update_callback_ = std::move(callback); }
 
   // ---- ESPHome Component failure state ----
   void mark_failed(const char * /*reason*/ = nullptr) { this->failed_ = true; }
@@ -78,6 +84,7 @@ class DisplayBuffer {
 
  private:
   bool auto_clear_enabled_{false};
+  std::function<void()> update_callback_;
   bool failed_{false};
 };
 
