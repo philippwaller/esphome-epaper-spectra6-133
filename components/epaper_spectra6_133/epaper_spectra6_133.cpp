@@ -566,6 +566,17 @@ void EpaperSpectra6133::loop() {
         this->active_operation_.refresh_completed = true;
       }
     }
+    if (this->active_operation_.power_on_sent) {
+      if (!this->controller_.send_refresh_pof()) {
+        ESP_LOGE(TAG, "Refresh power-off command failed during cancellation");
+        this->abort_display_operation_();
+        return;
+      }
+      this->active_operation_.power_on_sent = false;
+      this->active_operation_.stage_start_us = esp_timer_get_time();
+      this->active_operation_.stage = DisplayOperationStage::WAIT_POWER_OFF;
+      return;
+    }
     this->abort_display_operation_();
     return;
   }
@@ -1144,6 +1155,7 @@ void EpaperSpectra6133::process_power_on_stage_() {
     this->abort_display_operation_();
     return;
   }
+  this->active_operation_.power_on_sent = true;
   this->active_operation_.stage_start_us = esp_timer_get_time();
   this->active_operation_.stage = DisplayOperationStage::WAIT_POWER_ON;
 }
@@ -1206,6 +1218,7 @@ void EpaperSpectra6133::process_power_off_stage_() {
     this->abort_display_operation_();
     return;
   }
+  this->active_operation_.power_on_sent = false;
   this->active_operation_.stage_start_us = esp_timer_get_time();
   this->active_operation_.stage = DisplayOperationStage::WAIT_POWER_OFF;
 }

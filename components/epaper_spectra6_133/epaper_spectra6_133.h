@@ -142,6 +142,8 @@ struct DisplayOperation {
   // The panel then shows the transferred pixels even if the operation is cancelled
   // before its finalisation stage, so change detection must adopt that result.
   bool refresh_completed{false};
+  // True after PON succeeds until POF is sent. Cancellation must emit POF before cleanup.
+  bool power_on_sent{false};
 };
 
 /**
