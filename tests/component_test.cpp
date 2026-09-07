@@ -364,7 +364,37 @@ TEST_F(EpaperSpectra6133ComponentTest, CancelDuringRefreshStageWaitsForBusy) {
 }
 
 // ---------------------------------------------------------------------------
-// 12. Scheduling a new operation while an existing operation is in a refresh stage
+// 12. Cancellation after PON must power the panel off after BUSY is released.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, CancelAfterPowerOnSendsPowerOff) {
+  display_.refresh();
+  set_display_busy(true);
+
+  for (int i = 0; i < 2000 && operation_stage() != DisplayOperationStage::WAIT_POWER_ON; i++) {
+    g_mock_timer_us += 1000000LL;
+    display_.loop();
+  }
+  ASSERT_EQ(operation_stage(), DisplayOperationStage::WAIT_POWER_ON);
+  ASSERT_EQ(count_register_writes(transport_state().operations, POF), 0U);
+
+  display_.cancel();
+  set_display_busy(false);
+  display_.loop();
+
+  EXPECT_EQ(count_register_writes(transport_state().operations, POF), 1U);
+  EXPECT_TRUE(display_.is_processing());
+
+  set_display_busy(true);
+  display_.loop();
+  EXPECT_TRUE(display_.is_processing());
+
+  set_display_busy(false);
+  display_.loop();
+  EXPECT_FALSE(display_.is_processing());
+}
+
+// ---------------------------------------------------------------------------
+// 13. Scheduling a new operation while an existing operation is in a refresh stage
 //     queues it as pending without interrupting the running operation.
 // ---------------------------------------------------------------------------
 TEST_F(EpaperSpectra6133ComponentTest, ScheduleDuringRefreshStageQueuesPendingOperation) {
