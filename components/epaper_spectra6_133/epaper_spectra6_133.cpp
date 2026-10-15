@@ -28,14 +28,6 @@ static const char *const TAG = "epaper_spectra6_133";
 // loop responsive throughout a full-frame transfer (~200 loop steps total).
 static constexpr int OPERATION_ROWS_PER_STEP = 8;
 
-// Timeout for the DRF busy-wait in a refresh operation (microseconds).
-// A full-frame Spectra 6 refresh on this panel size runs for tens of seconds and
-// slows down further at low ambient temperature, so the guard is deliberately
-// well above the typical refresh duration. Aborting a refresh that is still
-// running would leave the panel half-updated and discard the change-detection
-// baseline, which is far worse than waiting a few extra seconds.
-static constexpr int64_t REFRESH_BUSY_TIMEOUT_US = 40000LL * 1000LL;  // 40 s
-
 // Timeout for the BUSY-wait stages that only cover the panel's power sequencing
 // (PON, POF, pre-deep-sleep). These complete in milliseconds on healthy hardware.
 static constexpr int64_t POWER_BUSY_TIMEOUT_US = 10000LL * 1000LL;  // 10 s
@@ -185,6 +177,7 @@ void EpaperSpectra6133::dump_config() {
                 this->clear_color_.blue);
   ESP_LOGCONFIG(TAG, "  Auto sleep: %s", this->auto_sleep_ ? "yes" : "no");
   ESP_LOGCONFIG(TAG, "  Power off after sleep: %s", this->power_off_after_sleep_ ? "yes" : "no");
+  ESP_LOGCONFIG(TAG, "  Refresh timeout: %u ms", static_cast<unsigned>(this->refresh_timeout_ms_));
   ESP_LOGCONFIG(
       TAG, "  Status: %s",
       this->is_failed()
@@ -556,7 +549,7 @@ void EpaperSpectra6133::loop() {
       } else if (this->controller_.is_display_busy()) {
         // Without this guard a panel that never releases BUSY would keep the
         // pipeline draining forever, silently swallowing every later request.
-        if ((esp_timer_get_time() - this->active_operation_.cancel_start_us) > REFRESH_BUSY_TIMEOUT_US) {
+        if ((esp_timer_get_time() - this->active_operation_.cancel_start_us) > this->refresh_timeout_us_()) {
           this->handle_panel_timeout_("cancellation drain");
         }
         return;  // panel still busy; poll again next loop()
@@ -1189,12 +1182,15 @@ void EpaperSpectra6133::process_refresh_screen_stage_() {
  */
 void EpaperSpectra6133::process_wait_refresh_stage_() {
   if (this->controller_.is_display_busy()) {
-    if ((esp_timer_get_time() - this->active_operation_.stage_start_us) > REFRESH_BUSY_TIMEOUT_US) {
+    if ((esp_timer_get_time() - this->active_operation_.stage_start_us) > this->refresh_timeout_us_()) {
       this->handle_panel_timeout_("display refresh");
     }
     return;  // still busy; try again next loop()
   }
   // The panel has completed the DRF cycle: the transferred pixels are now visible.
+  // Logged so the margin to the refresh timeout can be checked on real hardware.
+  ESP_LOGI(TAG, "Refresh wait took %lld ms",
+           static_cast<long long>((esp_timer_get_time() - this->active_operation_.stage_start_us) / 1000LL));
   this->active_operation_.refresh_completed = true;
   this->active_operation_.stage = DisplayOperationStage::POWER_OFF;
 }

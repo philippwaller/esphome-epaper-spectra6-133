@@ -21,6 +21,7 @@ from . import (
     CONF_POWER_OFF_AFTER_SLEEP,
     CONF_POWER_PIN,
     CONF_REFRESH_MODE,
+    CONF_REFRESH_TIMEOUT,
     CONF_RESET_PIN,
     CONF_SPI_HOST,
     CONF_UPDATE_MODE,
@@ -127,6 +128,14 @@ CONFIG_SCHEMA = cv.All(
             # Boolean. When true, deep sleep also switches power_pin low after the panel
             # enters sleep; defaults false because the next operation performs a cold wake.
             cv.Optional(CONF_POWER_OFF_AFTER_SLEEP, default=False): cv.boolean,
+            # Time. Longest wait for the panel to release BUSY after the refresh command
+            # before the refresh is treated as failed and the panel is re-initialized.
+            # Raise it when refreshes time out although the panel finishes (for example
+            # in a cold room, where the panel refreshes more slowly).
+            cv.Optional(CONF_REFRESH_TIMEOUT, default="40s"): cv.All(
+                cv.positive_time_period_milliseconds,
+                cv.Range(min=cv.TimePeriod(seconds=10), max=cv.TimePeriod(minutes=5)),
+            ),
         }
     ).extend(cv.polling_component_schema("never")),
 )
@@ -156,6 +165,7 @@ async def to_code(config):
     cg.add(var.set_clear_color(_CLEAR_COLORS[config[CONF_CLEAR_COLOR]]))
     cg.add(var.set_auto_sleep(config[CONF_AUTO_SLEEP]))
     cg.add(var.set_power_off_after_sleep(config[CONF_POWER_OFF_AFTER_SLEEP]))
+    cg.add(var.set_refresh_timeout(config[CONF_REFRESH_TIMEOUT].total_milliseconds))
 
     if CONF_LAMBDA in config:
         lambda_ = await cg.process_lambda(

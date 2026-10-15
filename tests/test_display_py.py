@@ -40,6 +40,9 @@ def _make_esphome_stubs() -> None:
     cv_stub.All = MagicMock(side_effect=lambda *args: args[-1] if args else None)
     cv_stub.one_of = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
     cv_stub.polling_component_schema = MagicMock(return_value=MagicMock())
+    cv_stub.positive_time_period_milliseconds = MagicMock()  # type: ignore[attr-defined]
+    cv_stub.Range = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
+    cv_stub.TimePeriod = MagicMock()  # type: ignore[attr-defined]
 
     cg_stub = types.ModuleType("esphome.codegen")
     ns_mock = MagicMock()

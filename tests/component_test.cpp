@@ -618,6 +618,55 @@ TEST_F(EpaperSpectra6133ComponentTest, CancelDrainTimesOutWhenBusyNeverClears) {
 }
 
 // ---------------------------------------------------------------------------
+// 14g. The refresh BUSY wait gives up after the default refresh_timeout (40 s).
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, RefreshWaitTimesOutAfterDefaultTimeout) {
+  display_.refresh();
+  for (int i = 0; i < 2000 && operation_stage() != DisplayOperationStage::WAIT_REFRESH; i++) {
+    g_mock_timer_us += 1000000LL;
+    display_.loop();
+  }
+  ASSERT_EQ(operation_stage(), DisplayOperationStage::WAIT_REFRESH);
+
+  set_display_busy(true);
+  for (int i = 0; i < 45 && display_.is_processing(); i++) {
+    g_mock_timer_us += 1000000LL;  // +1 s
+    display_.loop();
+  }
+
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_FALSE(display_.is_ready());
+}
+
+// ---------------------------------------------------------------------------
+// 14h. A longer refresh_timeout lets a slow refresh finish instead of tearing it down.
+// ---------------------------------------------------------------------------
+TEST_F(EpaperSpectra6133ComponentTest, RefreshWaitHonoursConfiguredTimeout) {
+  display_.set_auto_sleep(false);  // keep the controller initialized so is_ready() shows no teardown
+  display_.set_refresh_timeout(60000);
+  display_.refresh();
+  for (int i = 0; i < 2000 && operation_stage() != DisplayOperationStage::WAIT_REFRESH; i++) {
+    g_mock_timer_us += 1000000LL;
+    display_.loop();
+  }
+  ASSERT_EQ(operation_stage(), DisplayOperationStage::WAIT_REFRESH);
+
+  set_display_busy(true);
+  for (int i = 0; i < 50; i++) {
+    g_mock_timer_us += 1000000LL;  // +1 s, 50 s in total: past the 40 s default
+    display_.loop();
+  }
+  EXPECT_TRUE(display_.is_processing());
+  EXPECT_EQ(operation_stage(), DisplayOperationStage::WAIT_REFRESH);
+
+  set_display_busy(false);
+  run_loop_until_done();
+
+  EXPECT_FALSE(display_.is_processing());
+  EXPECT_TRUE(display_.is_ready());
+}
+
+// ---------------------------------------------------------------------------
 // 15. update_region() schedules an UPDATE_REGION operation with correct coordinates.
 // ---------------------------------------------------------------------------
 TEST_F(EpaperSpectra6133ComponentTest, UpdateRegionSchedulesOperationWithCoordinates) {

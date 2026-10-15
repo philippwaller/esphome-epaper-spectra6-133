@@ -20,6 +20,7 @@ CONF_UPDATE_MODE = "update_mode"
 CONF_CLEAR_COLOR = "clear_color"
 CONF_AUTO_SLEEP = "auto_sleep"
 CONF_POWER_OFF_AFTER_SLEEP = "power_off_after_sleep"
+CONF_REFRESH_TIMEOUT = "refresh_timeout"
 
 # ESP-IDF SPI host enum aliases. Raw integer values are also accepted.
 _SPI_HOST_NAMES: dict[str, int] = {

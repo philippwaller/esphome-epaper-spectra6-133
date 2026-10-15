@@ -244,6 +244,16 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
    * enters deep sleep; false to leave the panel power rail enabled.
    */
   void set_power_off_after_sleep(bool power_off_after_sleep) { this->power_off_after_sleep_ = power_off_after_sleep; }
+  /**
+   * @brief Sets how long a refresh may keep BUSY low before it is treated as failed.
+   *
+   * The wait starts when the refresh command is sent. On timeout the operation is
+   * aborted and the panel is re-initialized on the next operation. The same limit
+   * bounds the BUSY drain after cancel().
+   *
+   * @param timeout_ms  Maximum wait in milliseconds (default 40000).
+   */
+  void set_refresh_timeout(uint32_t timeout_ms) { this->refresh_timeout_ms_ = timeout_ms; }
 
   /** @brief Allocates the framebuffer and configures the hardware. */
   void setup() override;
@@ -489,6 +499,8 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   void commit_refresh_result_();
   // Recovers from a panel that never releases BUSY: forces a re-init and tears the operation down.
   void handle_panel_timeout_(const char *stage_name);
+  /** @brief refresh_timeout_ms_ in microseconds, the unit of esp_timer_get_time(). */
+  int64_t refresh_timeout_us_() const { return static_cast<int64_t>(this->refresh_timeout_ms_) * 1000LL; }
   // Returns true if the current operation stage may have the panel physically busy
   // (BUSY pin potentially LOW).  Cancellation must wait until BUSY clears.
   bool is_in_hw_refresh_stage_() const;
@@ -517,6 +529,7 @@ class EpaperSpectra6133 : public display::DisplayBuffer {
   Color clear_color_{WHITE};
   bool auto_sleep_{true};
   bool power_off_after_sleep_{false};
+  uint32_t refresh_timeout_ms_{DEFAULT_REFRESH_TIMEOUT_MS};
   bool sleeping_{false};
   UpdateRegion tracked_region_{};
   uint8_t *previous_frame_buffer_{nullptr};

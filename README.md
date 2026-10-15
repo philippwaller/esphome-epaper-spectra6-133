@@ -312,6 +312,7 @@ Use this local form only when the package file is present next to your ESPHome Y
 | `change_detection_mode` | string | `track` | How to detect changed pixels: `track` (pixel-write accumulator) or `compare` (frame comparison, requires up to an additional 1.92 MB of PSRAM during a refresh) |
 | `auto_sleep` | bool | `true` | Send the panel deep-sleep command after each successful refresh |
 | `power_off_after_sleep` | bool | `false` | Also switch `power_pin` low after the panel has entered deep sleep |
+| `refresh_timeout` | time | `40s` | Longest wait for the panel to finish a refresh before it is treated as failed (10s–5min) |
 | `update_interval` | time | `never` | How often to re-render the display. Use `never` to update only on demand. Accepts values like `30s`, `5min`, `1h`. |
 | `clear_color` | string | `white` | Colour used by `clear()` and by `auto_clear_enabled`. Valid values: `black`, `white`, `yellow`, `red`, `blue`, `green`. |
 | `auto_clear_enabled` | bool | `true` | Fill the canvas with `clear_color` before the lambda runs on each `update()` call. Has no effect on `refresh()` or `refresh_region()`. |
