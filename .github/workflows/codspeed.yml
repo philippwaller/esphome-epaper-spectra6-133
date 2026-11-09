@@ -64,7 +64,7 @@ jobs:
             --config RelWithDebInfo
 
       - name: Run CodSpeed benchmarks
-        uses: CodSpeedHQ/action@373d6868929f444bc08d901fd0eb0ad52a8875ea  # v5
+        uses: CodSpeedHQ/action@af75f77f17a054769abefaa42fe8dc2975469b5f  # v5
         with:
           mode: simulation
           run: ./build/codspeed/epaper_spectra6_133_benchmarks
