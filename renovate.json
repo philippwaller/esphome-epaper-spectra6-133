@@ -8,7 +8,10 @@
   "schedule": [
     "after 6:00am and before 7:00am on monday"
   ],
-  "dependencyDashboardOSVVulnerabilitySummary": "unresolved",
+  "dependencyDashboard": {
+    "osvVulnerabilitySummary": "unresolved",
+    "autoclose": true
+  },
   "osvVulnerabilityAlerts": true,
   "vulnerabilityAlerts": {
     "rangeStrategy": "in-range-only"
@@ -16,7 +19,6 @@
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
   "semanticCommitScope": "deps",
-  "dependencyDashboardAutoclose": true,
   "prConcurrentLimit": 5,
   "packageRules": [
     {
